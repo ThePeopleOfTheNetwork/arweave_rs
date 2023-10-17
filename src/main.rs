@@ -19,6 +19,7 @@ struct TestContext {
     pub reset_3rd_to_last_case: Vec<NonceLimiterInfo>,
 }
 
+// Static test data for the tests, lazy loaded at runtime.
 lazy_static! {
     static ref TEST_DATA: TestContext = {
         // Load the test NonceLimiterInfo
@@ -49,6 +50,7 @@ lazy_static! {
     };
 }
 
+/// Helper method for loading tests block info from disk
 fn parse_nonce_limiter_info_from_file(file_path: &str) -> NonceLimiterInfo {
     let mut file = File::open(file_path).expect("the file to exist");
     let mut buf = String::new();
@@ -57,6 +59,7 @@ fn parse_nonce_limiter_info_from_file(file_path: &str) -> NonceLimiterInfo {
     serde_json::from_str(&buf).expect("valid json for NonceLimiterInput")
 }
 
+/// Utility function fo executing a test, timing it, and logging results
 fn run_test(func: fn() -> bool, test_name: &str, logger: &mut Logger) {
     logger.loading(format!("{test_name}..."));
     let start = Instant::now();

@@ -31,7 +31,6 @@ pub struct NonceLimiterInfo {
 }
 
 /// serde helper method to convert a JSON `string` value to a `usize`
-
 fn optional_string_to_usize<'de, D>(deserializer: D) -> Result<Option<usize>, D::Error>
 where
     D: Deserializer<'de>,
@@ -48,7 +47,7 @@ where
     }
 }
 
-/// Utility traits to decode base64_url encoded hashes into their constituent bytes
+/// Traits to decode base64_url encoded hashes into their corresponding bytes
 pub trait DecodeHash: Sized {
     fn from(base64_url_string: &str) -> Result<Self, String>;
 }
@@ -85,6 +84,8 @@ static VDF_SHA_1S: usize = 15_000_000;
 // Reset the nonce limiter (vdf) once every 1200 steps/seconds or every ~20 min
 pub const NONCE_LIMITER_RESET_FREQUENCY: usize = 10 * 120;
 
+/// Takes the `global_step_number` and calculates how many steps previous an
+/// entropy reset would have happened, returning the steps since a reset.
 pub fn get_vdf_steps_since_reset(global_step_number: u64) -> usize {
     let reset_interval = NONCE_LIMITER_RESET_FREQUENCY as f64;
     let num_vdf_resets = global_step_number as f64 / reset_interval;
@@ -105,6 +106,9 @@ pub fn step_number_to_salt_number(step_number: usize) -> usize {
     }
 }
 
+/// Between Arweave v2.6 and v2.7 the vdf difficulty was stored in a constant so
+/// when parsing NonceLimiterInfo where there is no `vdf_difficulty` header,
+/// this method returns the correct constant difficulty.
 fn get_vdf_difficulty(nonce_info: &NonceLimiterInfo) -> usize {
     match nonce_info.vdf_difficulty {
         Some(diff) => diff,
