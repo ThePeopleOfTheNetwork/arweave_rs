@@ -1,0 +1,16 @@
+# Compiled files
+/target/
+
+# Output of 'cargo doc'
+/target/doc/
+
+# .env file
+.env
+
+# Vim/Emacs/VSCode/etc temporary files
+*~
+\#*\#
+.*.sw[a-z]
+.DS_Store
+.vscode/
+.idea/
