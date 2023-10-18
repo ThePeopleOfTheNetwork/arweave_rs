@@ -2,7 +2,8 @@ use rayon::prelude::*;
 use serde::{Deserialize, Deserializer};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
+//use sha2::{Digest, Sha256};
+use openssl::sha;
 use uint::construct_uint;
 
 // Definition of the U256 type
@@ -130,16 +131,17 @@ fn get_vdf_difficulty(nonce_info: &NonceLimiterInfo) -> usize {
 /// A new SHA256 seed hash containing the `reset_seed` entropy to use for
 /// calculating checkpoints after the reset.
 pub fn apply_reset_seed(seed: [u8; 32], reset_seed: [u8; 48]) -> [u8; 32] {
-    let mut hasher = Sha256::new();
+    let mut hasher = sha::Sha256::new();
 
     // First hash the reset_seed (a sha348 block hash)
     hasher.update(&reset_seed);
-    let reset_hash = hasher.finalize_reset();
+    let reset_hash = hasher.finish();
 
     // Then merge the current seed with the SHA256 has of the block hash.
+    let mut hasher = sha::Sha256::new();
     hasher.update(&seed);
     hasher.update(&reset_hash);
-    hasher.finalize_reset().into()
+    hasher.finish().into()
 }
 
 /// Calculates a VDF checkpoint by sequentially hashing a salt+seed, by the
@@ -166,7 +168,6 @@ pub fn vdf_sha2(
     let mut salt_bytes: [u8; 32] = [0; 32];
     let mut checkpoints: Vec<[u8; 32]> = vec![[0; 32]; num_checkpoints];
 
-    let mut hasher = Sha256::new();
     for checkpoint_idx in 0..num_checkpoints {
         //  initial checkpoint hash
         // -----------------------------------------------------------------
@@ -179,18 +180,20 @@ pub fn vdf_sha2(
         local_salt.to_big_endian(&mut salt_bytes);
 
         // Hash salt+seed
+        let mut hasher = sha::Sha256::new();
         hasher.update(&salt_bytes);
-        hasher.update(local_seed);
-        let mut hash_bytes = hasher.finalize_reset();
+        hasher.update(&local_seed);
+        let mut hash_bytes = hasher.finish();
 
         // subsequent hash iterations (if needed)
         // -----------------------------------------------------------------
         for _ in 1..num_iterations {
+            let mut hasher = sha::Sha256::new();
             hasher.update(&salt_bytes);
             hasher.update(&hash_bytes);
-            hash_bytes = hasher.finalize_reset();
+            hash_bytes = hasher.finish();
         }
-
+        
         // Store the result at the correct checkpoint index
         checkpoints[checkpoint_idx] = hash_bytes.into();
 

@@ -17,4 +17,5 @@ uint = "0.9.5"
 rayon = "1.8.0"
 lazy_static = "1.4.0"
 paris = "1.5.15"
+openssl = { version = "0.10.57", features = ["vendored"] }
 
