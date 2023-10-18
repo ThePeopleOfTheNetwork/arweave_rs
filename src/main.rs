@@ -1,4 +1,3 @@
-#![feature(test)]
 use eyre::Result;
 use lazy_static::lazy_static;
 use paris::Logger;
