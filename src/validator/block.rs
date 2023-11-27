@@ -1,5 +1,22 @@
-use crate::packing::consensus::RANDOMX_PACKING_KEY;
+use crate::helpers::{consensus::*, U256};
 use arweave_randomx_rs::*;
+
+pub fn compute_randomx_hash(key:&[u8], input:&[u8]) -> Vec<u8> {
+    let flags = RandomXFlag::get_recommended_flags();
+    let cache = RandomXCache::new(flags, key).unwrap();
+    let vm = RandomXVM::new(flags, Some(cache), None).unwrap();
+    vm.calculate_hash(&input).unwrap()
+}
+
+pub fn compute_randomx_hash_with_entropy(key:&[u8], input:&[u8]) -> ([u8;RANDOMX_HASH_SIZE],[u8; RANDOMX_ENTROPY_SIZE]) {
+    let flags = RandomXFlag::get_recommended_flags();
+    let cache = RandomXCache::new(flags, key).unwrap();
+    let vm = RandomXVM::new(flags, Some(cache), None).unwrap();
+
+    let randomx_program_count = 8;
+    let result = vm.calculate_hash_with_entropy(input, randomx_program_count).unwrap();
+    result
+}
 
 /// The reference erlang implementation refers to this as ar_block:compute_h0
 pub fn compute_mining_hash(
@@ -7,15 +24,20 @@ pub fn compute_mining_hash(
     partition_number: u32,
     vdf_seed: [u8; 48],
     mining_address: [u8; 32],
-) -> Vec<u8> {
+) -> [u8;32] {
     // TODO: Access the RandomX Cache from some global location
     let key = RANDOMX_PACKING_KEY;
-    // NOTE: FLAG_FULL_MEM is similar to HASH_FAST in the erlang code.
-    // let flags = RandomXFlag::get_recommended_flags() | RandomXFlag::FLAG_FULL_MEM;
+
+    // No dataset
     let flags = RandomXFlag::get_recommended_flags();
     let cache = RandomXCache::new(flags, key).unwrap();
-    // let dataset = RandomXDataset::new(flags, cache.clone(), 0).expect("Failed to allocate dataset");
     let vm = RandomXVM::new(flags, Some(cache), None).unwrap();
+
+    // NOTE: FLAG_FULL_MEM is similar to HASH_FAST in the erlang code.
+    // let flags = RandomXFlag::get_recommended_flags() | RandomXFlag::FLAG_FULL_MEM;
+    // let cache = RandomXCache::new(flags, key).unwrap();
+    // let dataset = RandomXDataset::new(flags, cache.clone(), 0).expect("Failed to allocate dataset");
+    // let vm = RandomXVM::new(flags, Some(cache), Some(dataset)).unwrap();
 
     // Byte order for mining hash (remember erlang is BigEndian for ints)
     // vdf_output + partition_number + vdf_seed + mining_address
@@ -24,7 +46,10 @@ pub fn compute_mining_hash(
 
     input.append(&mut vdf_output.to_vec());
 
-    let partition_bytes: [u8; 4] = partition_number.to_be_bytes();
+    let pn:U256 = U256::from(partition_number);
+
+    let mut partition_bytes: [u8; 32] = [0u8; 32];
+    pn.to_big_endian(&mut partition_bytes);
     input.append(&mut partition_bytes.try_into().unwrap());
 
     input.append(&mut vdf_seed[..32].to_vec()); // Use first 32 bytes of vdf_seed
@@ -33,7 +58,11 @@ pub fn compute_mining_hash(
 
     //println!("input: {input:?} len: {}", input.len());
 
-    vm.calculate_hash(&input).unwrap()
+    let mining_hash = vm.calculate_hash(&input).unwrap();
+
+    let hash_array: [u8; 32] = mining_hash
+    .try_into().unwrap();
+    hash_array
 }
 
 pub fn compute_mining_hash_test(

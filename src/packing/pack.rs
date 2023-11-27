@@ -1,8 +1,6 @@
 use arweave_randomx_rs::{RandomXCache, RandomXFlag, RandomXVM};
 
-use crate::helpers::U256;
-
-use super::consensus::*;
+use crate::helpers::{U256, consensus::*};
 
 pub fn pack_chunk(chunk_offset:U256, reward_address:&[u8;32], tx_root:&[u8;32]) -> Vec<u8> {
     let key = RANDOMX_PACKING_KEY;
