@@ -6,16 +6,18 @@ use crate::helpers::{DecodeHash, U256};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ArweaveBlockHeader {
-    pub partition_number: usize,
+    pub partition_number: u64,
     pub nonce_limiter_info: NonceLimiterInfo,
     #[serde(deserialize_with = "decode_hash_to_bytes")]
     pub hash_preimage: [u8; 32],
     #[serde(deserialize_with = "decode_hash_to_bytes")]
     pub previous_block: [u8; 48],
-    pub timestamp: usize,
+    pub timestamp: u64,
     pub last_retarget: u64,
     #[serde(deserialize_with = "parse_string_to_u64")]
     pub recall_byte: u64,
+    #[serde(deserialize_with = "parse_string_to_u64")]
+    pub reward: u64,
     #[serde(deserialize_with = "decode_hash_to_bytes")]
     pub chunk_hash: [u8; 32],
     #[serde(default, deserialize_with = "parse_optional_string_to_u64")]
@@ -24,15 +26,21 @@ pub struct ArweaveBlockHeader {
     pub chunk2_hash: Option<[u8; 32]>,
     #[serde(deserialize_with = "decode_hash_to_bytes")]
     pub hash: [u8; 32],
-    #[serde(default, deserialize_with = " parse_string_to_u256")]
+    #[serde(default, deserialize_with = "parse_string_to_u256")]
     pub diff: U256,
     pub height: u64,
+    #[serde(deserialize_with = "parse_array_of_base64_to_bytes")]
+    pub txs: Vec<Vec<u8>>,
     #[serde(deserialize_with = "base64_string_to_bytes")]
     pub nonce: Vec<u8>,
     #[serde(deserialize_with = "decode_hash_to_bytes")]
     pub tx_root: [u8; 32],
     #[serde(deserialize_with = "decode_hash_to_bytes")]
+    pub wallet_list: [u8; 48],
+    #[serde(deserialize_with = "decode_hash_to_bytes")]
     pub reward_addr: [u8; 32],
+    #[serde(deserialize_with = "parse_array_of_base64_to_bytes")]
+    pub tags: Vec<Vec<u8>>,
     #[serde(deserialize_with = "parse_string_to_u64")]
     pub reward_pool: u64,
     #[serde(deserialize_with = "parse_string_to_u64")]
@@ -41,6 +49,18 @@ pub struct ArweaveBlockHeader {
     pub block_size: u64,
     #[serde(deserialize_with = "parse_string_to_u64")]
     pub cumulative_diff: u64,
+    #[serde(deserialize_with = "base64_string_to_bytes")]
+    pub reward_key: Vec<u8>,
+    #[serde(deserialize_with = "parse_usd_to_ar_rate")]
+    pub usd_to_ar_rate: [u64; 2],
+    #[serde(deserialize_with = "parse_usd_to_ar_rate")]
+    pub scheduled_usd_to_ar_rate: [u64; 2],
+    #[serde(deserialize_with = "parse_string_to_u64")]
+    pub packing_2_5_threshold: u64,
+    #[serde(deserialize_with = "parse_string_to_u64")]
+    pub strict_data_split_threshold: u64,
+    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    pub hash_list_merkle: [u8; 48],
     pub poa: PoaData,
     pub poa2: PoaData,
 }
@@ -70,6 +90,16 @@ impl Default for ArweaveBlockHeader {
             poa2: Default::default(),
             nonce: Default::default(),
             cumulative_diff: Default::default(),
+            wallet_list: [0u8; 48],
+            hash_list_merkle: [0u8; 48],
+            packing_2_5_threshold: Default::default(),
+            usd_to_ar_rate: Default::default(),
+            scheduled_usd_to_ar_rate: Default::default(),
+            strict_data_split_threshold: Default::default(),
+            txs: Default::default(),
+            tags: Default::default(),
+            reward: Default::default(),
+            reward_key: Default::default(),
         }
     }
 }
@@ -99,8 +129,10 @@ pub struct NonceLimiterInfo {
     pub next_zone_upper_bound: u64,
     #[serde(deserialize_with = "decode_hash_to_bytes")]
     pub prev_output: [u8; 32],
-    pub last_step_checkpoints: Vec<String>,
-    pub checkpoints: Vec<String>,
+    #[serde(deserialize_with = "parse_array_of_hashes_to_bytes")]
+    pub last_step_checkpoints: Vec<[u8;32]>,
+    #[serde(deserialize_with = "parse_array_of_hashes_to_bytes")]
+    pub checkpoints: Vec<[u8;32]>,
     #[serde(default, deserialize_with = "parse_optional_string_to_u64")]
     pub vdf_difficulty: Option<u64>,
     #[serde(default, deserialize_with = "parse_optional_string_to_u64")]
@@ -192,4 +224,92 @@ where
 {
     let s = String::deserialize(deserializer)?;
     base64_url::decode(&s).map_err(serde::de::Error::custom)
+}
+
+fn parse_usd_to_ar_rate<'de, D>(deserializer: D) -> Result<[u64; 2], D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // Deserialize `usd_to_ar_rate` as a vector of strings.
+    let vec: Vec<String> = Deserialize::deserialize(deserializer)?;
+
+    // Try to convert the vector of strings to a vector of `u64`.
+    let mut numbers = vec.iter().map(|s| s.parse::<u64>());
+
+    // Extract two numbers from the iterator to create an array.
+    let n1 = numbers
+        .next()
+        .ok_or_else(|| serde::de::Error::custom("Invalid first number"))?
+        .unwrap();
+
+    let n2 = numbers
+        .next()
+        .ok_or_else(|| serde::de::Error::custom("Invalid second number"))?
+        .unwrap();
+
+    // Return the array of numbers, or an error if parsing failed.
+    Ok([n1, n2])
+}
+
+fn parse_array_of_hashes_to_bytes<'de, D>(deserializer: D) -> Result<Vec<[u8; 32]>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct Base64VecVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for Base64VecVisitor {
+        type Value = Vec<[u8; 32]>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a base64 URL encoded string")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Vec<[u8; 32]>, A::Error>
+        where
+            A: serde::de::SeqAccess<'de>,
+        {
+            let mut buffer = Vec::new();
+
+            while let Some(elem) = seq.next_element::<String>()? {
+                let bytes: [u8; 32] = DecodeHash::from(&elem).map_err(serde::de::Error::custom)?;
+                buffer.push(bytes);
+            }
+
+            Ok(buffer)
+        }
+    }
+
+    deserializer.deserialize_seq(Base64VecVisitor)
+}
+
+fn parse_array_of_base64_to_bytes<'de, D>(deserializer: D) -> Result<Vec<Vec<u8>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct Base64VecVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for Base64VecVisitor {
+        type Value = Vec<Vec<u8>>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a base64 URL encoded string")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Vec<Vec<u8>>, A::Error>
+        where
+            A: serde::de::SeqAccess<'de>,
+        {
+            let mut buffer: Vec<Vec<u8>> = Vec::new();
+            while let Some(elem) = seq.next_element::<String>()? {
+                let mut bytes = base64_url::decode(&elem)
+                    .map(Some)
+                    .map_err(serde::de::Error::custom)?;
+                buffer.push(bytes.expect("base64url encoded bytes can be parsed"));
+            }
+
+            Ok(buffer)
+        }
+    }
+
+    deserializer.deserialize_seq(Base64VecVisitor)
 }
