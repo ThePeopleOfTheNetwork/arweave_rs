@@ -60,17 +60,25 @@ pub fn pre_validate_block(
     }
 
     // Validate the chunk_hash to see if it matches the poa chunk
-    let chunk = block_header.poa.chunk.as_ref().expect("poa.chunk should exist");
+    let chunk = block_header
+        .poa
+        .chunk
+        .as_ref()
+        .expect("poa.chunk should exist");
     if !chunk_hash_is_valid(&block_header.chunk_hash, &chunk, block_height) {
-        return Err(eyre!("chunk_hash does not match poa.chunk"))
+        return Err(eyre!("chunk_hash does not match poa.chunk"));
     }
 
     // Validate chunk2_hash to see that it matches the poa2 chunk if present
     if block_header.chunk2_hash.is_some() {
-        let chunk = block_header.poa2.chunk.as_ref().expect("poa2.chunk should exist");
+        let chunk = block_header
+            .poa2
+            .chunk
+            .as_ref()
+            .expect("poa2.chunk should exist");
         let chunk2_hash = block_header.chunk2_hash.unwrap_or_default();
         if !chunk_hash_is_valid(&chunk2_hash, &chunk, block_height) {
-            return Err(eyre!("chunk2_hash does not match poa2.chunk"))
+            return Err(eyre!("chunk2_hash does not match poa2.chunk"));
         }
     }
 
@@ -128,7 +136,7 @@ fn proof_size_is_valid(poa_data: &PoaData, block_height: u64) -> bool {
         && chunk.len() <= DATA_CHUNK_SIZE
 }
 
-fn chunk_hash_is_valid(chunk_hash: &[u8;32], chunk: &Vec<u8>, block_height: u64) -> bool {
+fn chunk_hash_is_valid(chunk_hash: &[u8; 32], chunk: &Vec<u8>, block_height: u64) -> bool {
     if block_height < FORK_2_7_HEIGHT {
         return true;
     }
@@ -139,80 +147,213 @@ fn chunk_hash_is_valid(chunk_hash: &[u8;32], chunk: &Vec<u8>, block_height: u64)
     hash == *chunk_hash
 }
 
-// %% The elements must be either fixed-size or separated by the size separators (
-// %% the ar_serialize:encode_* functions).
-// Segment = << (encode_bin(PrevH, 8))/binary, (encode_int(TS, 8))/binary,
-//         (encode_bin(Nonce2, 16))/binary, (encode_int(Height, 8))/binary,
-//         (encode_int(Diff, 16))/binary, (encode_int(CDiff, 16))/binary,
-//         (encode_int(LastRetarget, 8))/binary, (encode_bin(Hash, 8))/binary,
-//         (encode_int(BlockSize, 16))/binary, (encode_int(WeaveSize, 16))/binary,
-//         (encode_bin(Addr2, 8))/binary, (encode_bin(TXRoot, 8))/binary,
-//         (encode_bin(WalletList, 8))/binary,
-//         (encode_bin(HashListMerkle, 8))/binary, (encode_int(RewardPool, 8))/binary,
-//         (encode_int(Packing_2_5_Threshold, 8))/binary,
-//         (encode_int(StrictChunkThreshold, 8))/binary,
-//                 (encode_int(RateDividend, 8))/binary,
-//         (encode_int(RateDivisor, 8))/binary,
-//                 (encode_int(ScheduledRateDividend, 8))/binary,
-//         (encode_int(ScheduledRateDivisor, 8))/binary,
-//         (encode_bin_list(Tags, 16, 16))/binary,
-//         (encode_bin_list([GetTXID(TX) || TX <- TXs], 16, 8))/binary,
-//         (encode_int(Reward, 8))/binary,
-//         (encode_int(RecallByte, 16))/binary, (encode_bin(HashPreimage, 8))/binary,
-//         (encode_int(RecallByte2, 16))/binary, (encode_bin(RewardKey2, 16))/binary,
-//         (encode_int(PartitionNumber, 8))/binary, Output:32/binary, N:64,
-//         Seed:48/binary, NextSeed:48/binary, PartitionUpperBound:256,
-//         NextPartitionUpperBound:256, (encode_bin(PrevOutput, 8))/binary,
-//         (length(Steps)):16, (iolist_to_binary(Steps))/binary,
-//         (length(LastStepCheckpoints)):16, (iolist_to_binary(LastStepCheckpoints))/binary,
-//         (encode_bin(PreviousSolutionHash, 8))/binary,
-//         (encode_int(PricePerGiBMinute, 8))/binary,
-//         (encode_int(ScheduledPricePerGiBMinute, 8))/binary,
-//         RewardHistoryHash:32/binary, (encode_int(DebtSupply, 8))/binary,
-//         KryderPlusRateMultiplier:24, KryderPlusRateMultiplierLatch:8, Denomination:24,
-//         (encode_int(RedenominationHeight, 8))/binary,
-//         (ar_serialize:encode_double_signing_proof(DoubleSigningProof))/binary,
-//         (encode_int(PrevCDiff, 16))/binary, RebaseThresholdBin/binary,
-//         DataPathBin/binary, TXPathBin/binary, DataPath2Bin/binary, TXPath2Bin/binary,
-//         ChunkHashBin/binary, Chunk2HashBin/binary, BlockTimeHistoryHashBin/binary,
-//         VDFDifficultyBin/binary, NextVDFDifficultyBin/binary >>,
-// crypto:hash(sha256, Segment).
+trait LastBytes {
+    fn last_2_bytes(&self) -> &[u8];
+    fn last_byte(&self) -> u8;
+}
 
+impl LastBytes for [u8] {
+    fn last_2_bytes(&self) -> &[u8] {
+        let byte_count = 2;
+        let start = if byte_count > self.len() {
+            0
+        } else {
+            self.len() - byte_count
+        };
+        &self[start..]
+    }
 
-// let mut input = Vec::new();
+    fn last_byte(&self) -> u8 {
+        let byte_count = 1;
+        let start = if byte_count > self.len() {
+            0
+        } else {
+            self.len() - byte_count
+        };
+        self[start..][0]
+    }
+}
+// trait En
 
-//     input.append(&mut vdf_output.to_vec());
+trait EncodeBytes {
+    fn encode_u64_1(&mut self, val: u64) -> &mut Self;
+    fn encode_u64_2(&mut self, val: u64) -> &mut Self;
+    fn encode_buf_1(&mut self, val: &[u8]) -> &mut Self;
+    fn encode_buf_2(&mut self, val: &[u8]) -> &mut Self;
+    fn encode_buf_list_1(&mut self, val:&Vec<Vec<u8>>) -> &mut Self;
+    fn encode_buf_list_2(&mut self, val:&Vec<Vec<u8>>) -> &mut Self;
+    fn encode_raw_u64_8(&mut self, val: u64) -> &mut Self;
+    fn encode_raw_u64_32(&mut self, val: u64) -> &mut Self;
+    fn encode_raw_hash(&mut self, val: &[u8]) -> &mut Self;
+}
 
-//     let pn:U256 = U256::from(partition_number);
+impl EncodeBytes for Vec<u8> {
+    /// Encode u64 with a 1 byte size prefix
+    fn encode_u64_1(&mut self, val: u64) -> &mut Self {
+        let bytes = val.to_be_bytes();
+        let size = bytes.len();
+        let mut size_bytes = Vec::from(&size.to_be_bytes()[size - 1..]);
+        self.append(&mut size_bytes);
+        self.extend_from_slice(&bytes[..]);
+        self
+    }
 
-//     let mut partition_bytes: [u8; 32] = [0u8; 32];
-//     pn.to_big_endian(&mut partition_bytes);
-//     input.append(&mut partition_bytes.try_into().unwrap());
+    /// Encode u64 with a 1 byte size prefix
+    fn encode_u64_2(&mut self, val: u64) -> &mut Self {
+        let bytes = val.to_be_bytes();
+        let size = bytes.len();
+        let mut size_bytes = Vec::from(&size.to_be_bytes()[size - 2..]);
+        self.append(&mut size_bytes);
+        self.extend_from_slice(&bytes[..]);
+        self
+    }
 
-//     input.append(&mut vdf_seed[..32].to_vec()); // Use first 32 bytes of vdf_seed
+    /// Encode a byte array with a 1 byte size prefix
+    fn encode_buf_1(&mut self, bytes: &[u8]) -> &mut Self {
+        let size = bytes.len();
+        let mut size_bytes = Vec::from(&size.to_be_bytes()[size - 1..]);
+        self.append(&mut size_bytes);
+        self.extend_from_slice(&bytes[..]);
+        self
+    }
 
-//     input.append(&mut mining_address.to_vec());
+    /// Encode a byte array with a 2 byte size prefix
+    fn encode_buf_2(&mut self, bytes: &[u8]) -> &mut Self {
+        let size = bytes.len();
+        let mut size_bytes = Vec::from(&size.to_be_bytes()[size - 2..]);
+        self.append(&mut size_bytes);
+        self.extend_from_slice(&bytes[..]);
+        self
+    }
 
+    /// Encode a list of byte arrays with a ONE byte size prefix on each element
+    /// and a 2 byte count prefix for the encoded list of elements.
+    fn encode_buf_list_1(&mut self, data: &Vec<Vec<u8>>)  -> &mut Self {
+        // Number of elements in the list, as 2 bytes
+        let num_elements = data.len() as u16;
+        self.extend_from_slice(&num_elements.to_be_bytes());
+        // Iterate over each element in the data vector
+        for elem in data {
+            self.encode_buf_1(elem);
+        }
+        self
+    }
+
+    /// Encode a list of byte arrays with a TWO byte size prefix on each element
+    /// and a 2 byte count prefix for the encoded list of elements.
+    fn encode_buf_list_2(&mut self, data: &Vec<Vec<u8>>)  -> &mut Self {
+        // Number of elements in the list, as 2 bytes
+        let num_elements = data.len() as u16;
+        self.extend_from_slice(&num_elements.to_be_bytes());
+        // Iterate over each element in the data vector
+        for elem in data {
+            self.encode_buf_2(elem);
+        }
+        self
+    }
+
+    fn encode_raw_u64_8(&mut self, val: u64) -> &mut Self {
+        self.extend_from_slice(&val.to_be_bytes()[..]);
+        self
+    }
+    fn encode_raw_u64_32(&mut self, val: u64) -> &mut Self {
+        let mut bytes = [0u8; 32]; 
+        // Copy the big-endian bytes of val into the last 8 bytes of the array
+        bytes[24..32].copy_from_slice(&val.to_be_bytes()); 
+        self.extend_from_slice(&bytes); 
+        self
+    }
+    fn encode_raw_hash(&mut self, val: &[u8]) -> &mut Self {
+        self.extend_from_slice(&val[..]);
+        self
+    }
+}
 
 fn compute_block_hash(block_header: &ArweaveBlockHeader) -> [u8; 32] {
-
     let b = block_header;
-    let mut diff_bytes:[u8;32] = Default::default();
+    let mut diff_bytes: [u8; 32] = Default::default();
     b.diff.to_big_endian(&mut diff_bytes);
 
-    let mut buf:Vec<u8> = Vec::new();
-    buf.push(b.previous_block[0]);
-    buf.push(b.timestamp.to_be_bytes()[0]);
-    buf.push(b.nonce[0]);
-    buf.push(b.height.to_be_bytes()[0]);
-    buf.extend_from_slice(&diff_bytes[0..=1]);
-    buf.extend_from_slice(&b.cumulative_diff.to_be_bytes()[0..=1]);
-    buf.push(b.last_retarget.to_be_bytes()[0]);
-    buf.push(b.hash[0]);
-    buf.extend_from_slice(&b.block_size.to_be_bytes()[0..=1]);
-    buf.extend_from_slice(&b.weave_size.to_be_bytes()[0..=1]);
+    let mut buff: Vec<u8> = Vec::new();
+    buff.encode_buf_1(&b.previous_block)
+        .encode_u64_1(b.timestamp)
+        .encode_buf_1(&b.nonce)
+        .encode_u64_1(b.height)
+        .encode_buf_2(&diff_bytes)
+        .encode_u64_2(b.cumulative_diff)
+        .encode_u64_1(b.last_retarget)
+        .encode_buf_1(&b.hash)
+        .encode_u64_2(b.block_size)
+        .encode_u64_2(b.weave_size)
+        .encode_buf_1(&b.reward_addr)
+        .encode_buf_1(&b.tx_root)
+        .encode_buf_1(&b.wallet_list)
+        .encode_buf_1(&b.hash_list_merkle)
+        .encode_u64_1(b.reward_pool)
+        .encode_u64_1(b.packing_2_5_threshold)
+        .encode_u64_1(b.usd_to_ar_rate[0])
+        .encode_u64_1(b.usd_to_ar_rate[1])
+        .encode_u64_1(b.scheduled_usd_to_ar_rate[0])
+        .encode_u64_1(b.scheduled_usd_to_ar_rate[1])
+        .encode_buf_list_2(&b.tags)
+        .encode_buf_list_1(&b.txs)
+        .encode_u64_1(b.reward)
+        .encode_u64_2(b.recall_byte)
+        .encode_buf_1(&b.hash_preimage)
+        .encode_u64_2(b.recall_byte2.unwrap_or(0))
+        .encode_buf_2(&b.reward_key)
+        .encode_u64_1(b.partition_number)
+        .encode_raw_hash(&b.nonce_limiter_info.output)
+        .encode_raw_u64_8(b.nonce_limiter_info.global_step_number)
+        .encode_raw_hash(&b.nonce_limiter_info.seed)
+        .encode_raw_hash(&b.nonce_limiter_info.next_seed)
+        .encode_raw_u64_32(b.nonce_limiter_info.zone_upper_bound)
+        .encode_raw_u64_32(b.nonce_limiter_info.next_zone_upper_bound)
+        .encode_buf_1(&b.nonce_limiter_info.prev_output);
 
     let mut hasher = sha::Sha256::new();
-    hasher.update(&buf);
+    hasher.update(&buff);
     hasher.finish()
+}
+
+fn encode_txs_list(data: &Vec<[u8; 32]>) -> Vec<u8> {
+    let mut buffer = Vec::new();
+
+    // Number of elements in the list, as 2 bytes
+    let num_elements = data.len() as u16;
+    buffer.extend_from_slice(&num_elements.to_be_bytes());
+
+    // Iterate over each element in the data vector
+    for elem in data {
+        buffer.encode_buf_1(elem);
+    }
+
+    buffer
+}
+
+fn encode_tags_list(data: &Vec<Vec<u8>>) -> Vec<u8> {
+    let mut buffer = Vec::new();
+
+    // Number of elements in the list, as 2 bytes
+    let num_elements = data.len() as u16;
+    buffer.extend_from_slice(&num_elements.to_be_bytes());
+
+    // Iterate over each element in the data vector
+    for elem in data {
+        // Size of the element, in 2 bytes
+        let element_size = elem.len() as u16; // Each element is less than 65,535 bytes in size
+        buffer.extend_from_slice(&element_size.to_be_bytes());
+
+        // Element's bytes
+        buffer.extend_from_slice(elem);
+    }
+
+    buffer
+}
+
+fn encode_optional_u64(value: Option<u64>) -> [u8; 8] {
+    match value {
+        Some(v) => v.to_be_bytes(),
+        None => 0u64.to_be_bytes(),
+    }
 }

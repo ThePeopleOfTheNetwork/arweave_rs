@@ -3,7 +3,7 @@ use rayon::prelude::*;
 use openssl::sha;
 
 
-use crate::{json_types::NonceLimiterInfo, helpers::{DecodeHash, U256}};
+use crate::{json_types::NonceLimiterInfo, helpers::U256};
 
 // 25 checkpoints 40 ms each = 1000 ms
 pub static NUM_CHECKPOINTS_IN_VDF_STEP: usize = 25;
@@ -154,18 +154,9 @@ pub fn vdf_sha2(
 pub fn last_step_checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
     let num_iterations = get_vdf_difficulty(nonce_info);
     let global_step_number: usize = nonce_info.global_step_number as usize;
-
-    let seed_hash_string = nonce_info.checkpoints.get(1).unwrap();
-    let mut _seed: [u8; 32] = DecodeHash::from(&seed_hash_string).unwrap();
-
-    let mut checkpoint_hashes: Vec<[u8; 32]> = nonce_info
-        .last_step_checkpoints
-        .par_iter()
-        .map(|cp_string| {
-            let expected_hash = DecodeHash::from(&cp_string).unwrap();
-            expected_hash
-        })
-        .collect();
+    
+    let mut _seed = *nonce_info.checkpoints.get(1).unwrap();
+    let mut checkpoint_hashes = nonce_info.last_step_checkpoints.clone();
 
     // If the vdf reset happened on this step, apply the entropy to the seed
     if (global_step_number as f64 / NUM_CHECKPOINTS_IN_VDF_STEP as f64).fract() == 0.0 {
@@ -182,18 +173,13 @@ pub fn last_step_checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
     let cp = checkpoint_hashes.clone();
 
     // Calculate all checkpoints in parallel with par_iter()
-    let test: Vec<[u8; 32]> = (0..NUM_CHECKPOINTS_IN_VDF_STEP)
+    let mut test: Vec<[u8; 32]> = (0..NUM_CHECKPOINTS_IN_VDF_STEP)
         .into_par_iter()
         .map(|i| {
             let salt: U256 = (step_number_to_salt_number(global_step_number - 1) + i).into();
             let res = vdf_sha2(salt, cp[i], 1, num_iterations);
             res[0]
         })
-        .collect();
-
-    let mut test: Vec<String> = test
-        .par_iter()
-        .map(|hash| base64_url::encode(hash))
         .collect();
 
     // Reverse our calculated checkpoints so they are the same order as the blocks
@@ -203,7 +189,7 @@ pub fn last_step_checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
 
     if is_valid == false {
         // Compare the original list with the calculated one
-        let mismatches: Vec<(usize, &String, &String)> = nonce_info
+        let mismatches: Vec<(usize, &[u8;32], &[u8;32])> = nonce_info
             .last_step_checkpoints
             .iter()
             .zip(&test)
@@ -215,7 +201,7 @@ pub fn last_step_checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
         for (index, a, b) in mismatches {
             println!(
                 "Mismatched hashes at index {}: expected {} got {}",
-                index, a, b
+                index, base64_url::encode(a), base64_url::encode(b)
             );
         }
     }
@@ -238,23 +224,14 @@ pub fn checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
     let previous_seed = nonce_info.prev_output;
     let reset_seed = nonce_info.seed;
 
-    // Convert all of the url encoded step hashes to bytes
-    let mut step_hashes: Vec<[u8; 32]> = nonce_info
-        .checkpoints
-        .par_iter()
-        .map(|cp_string| {
-            let expected_hash = DecodeHash::from(cp_string).unwrap();
-            expected_hash
-        })
-        .collect();
+    // Create a working copy of the step hashes (called checkpoints in the json)
+    let mut step_hashes = nonce_info.checkpoints.clone();
 
     // Add the seed from the previous nonce info to the steps
     step_hashes.push(previous_seed);
 
     // Reverse the step hashes so they can be iterated from oldest to most recent
     step_hashes.reverse();
-
-    //z7ggG3WV9oITD2OgpSU66j0Jt_q9nk0V4c9g7bPcyK0
 
     // Make a read only copy for parallel iterating
     let steps = step_hashes.clone();
@@ -264,28 +241,20 @@ pub fn checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
     // Calculate the step number of the first step in the blocks sequence
     let start_step_number = nonce_info.global_step_number as usize - nonce_info.checkpoints.len();
 
-    // We must calculate the steps sequentially because we only have the first
-    // and last checkpoint of each step, but we can do the steps in parallel
-    let test: Vec<[u8; 32]> = (0..steps.len() - 1)
+    // We must calculate the checkpoint iterations sequentially because we only 
+    // have the first and last checkpoint of each step, but we can do the steps
+    // in parallel
+    let mut test: Vec<[u8; 32]> = (0..steps.len() - 1)
         .into_par_iter()
         .map(|i| {
             let salt: U256 = (step_number_to_salt_number(start_step_number + i)).into();
             let mut seed = steps[i];
             if i == reset_index {
-                // println!(
-                //     "reset_index: {i}, reset_seed: {}",
-                //     base64_url::encode(&seed)
-                // );
                 seed = apply_reset_seed(seed, reset_seed);
             }
             let checkpoints = vdf_sha2(salt, seed, NUM_CHECKPOINTS_IN_VDF_STEP, num_iterations);
             *checkpoints.last().unwrap()
         })
-        .collect();
-
-    let mut test: Vec<String> = test
-        .par_iter()
-        .map(|hash| base64_url::encode(hash))
         .collect();
 
     test.reverse();
@@ -294,7 +263,7 @@ pub fn checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
 
     if is_valid == false {
         // Compare the original list with the calculated one
-        let mismatches: Vec<(usize, &String, &String)> = nonce_info
+        let mismatches: Vec<(usize, &[u8;32], &[u8;32])> = nonce_info
             .checkpoints
             .iter()
             .zip(&test)
@@ -306,7 +275,7 @@ pub fn checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
         for (index, a, b) in mismatches {
             println!(
                 "Mismatched hashes at index {}: expected {} got {}",
-                index, a, b
+                index, base64_url::encode(a), base64_url::encode(b)
             );
         }
     }
