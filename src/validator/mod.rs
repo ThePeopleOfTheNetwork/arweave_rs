@@ -78,16 +78,20 @@ pub fn pre_validate_block(
     // Arweave General checks
     // =========================================================================
 
-    // Compute the block_hash and validate the signature
-    compute_block_hash(block_header);
+    // Compute the block_hash and validate it against the `indep_hash` header
+    if !block_hash_is_valid(block_header) {
+        return Err(eyre!("indep_hash does not match calculated block_has"));
+    }
 
-    // Validate timestamp
+    // Validate timestamp - !only needed when validating new blocks!
 
-    // Validate Solution hash
+    // Validate existing Solution hash - check to see if this solution has 
+    // been validated and possibly report a double signing
 
-    // Validate VDF step is within range of current
+    // Validate VDF step is within range of current - !only for new blocks!
 
-    // Validate previous Solution
+    // Validate previous Solution - does the previous blocks hash match the
+    // current blocks - previous_solution_hash
 
     // Validate last re-target
 
@@ -177,7 +181,7 @@ trait ExtendBytes {
     fn extend_u64(&mut self, size_bytes: usize, val: &u64) -> &mut Self;
     fn extend_big(&mut self, size_bytes: usize, val: &U256) -> &mut Self;
     fn extend_optional_big(&mut self, size_bytes: usize, val: &Option<U256>) -> &mut Self;
-    fn extend_optional_hash(&mut self, size_bytes: usize, val: Option<[u8;32]>) -> &mut Self;
+    fn extend_optional_hash(&mut self, size_bytes: usize, val: &Option<[u8;32]>) -> &mut Self;
     fn extend_buf(&mut self, size_bytes: usize, val: &[u8]) -> &mut Self;
     fn extend_buf_list(&mut self, size_bytes: usize, val: &Vec<Vec<u8>>) -> &mut Self;
     fn extend_hash_list(&mut self, val: &Vec<[u8; 32]>) -> &mut Self;
@@ -267,7 +271,7 @@ impl ExtendBytes for Vec<u8> {
         self
     }
 
-    fn extend_optional_hash(&mut self, size_bytes: usize, val: Option<[u8;32]>) -> &mut Self {
+    fn extend_optional_hash(&mut self, size_bytes: usize, val: &Option<[u8;32]>) -> &mut Self {
         let mut bytes:Vec<u8> = Vec::new();
         if let Some(val_bytes) = val {
             bytes.extend_from_slice(&val_bytes[..]);
@@ -298,7 +302,7 @@ impl ExtendBytes for Vec<u8> {
     }
 }
 
-fn compute_block_hash(block_header: &ArweaveBlockHeader) -> bool {
+fn block_hash_is_valid(block_header: &ArweaveBlockHeader) -> bool {
     let b = block_header;
     let nonce_info = &b.nonce_limiter_info;
     let mut diff_bytes: [u8; 32] = Default::default();
@@ -363,7 +367,7 @@ fn compute_block_hash(block_header: &ArweaveBlockHeader) -> bool {
         .extend_buf(3, &b.poa2.data_path)
         .extend_buf(3, &b.poa2.tx_path)
         .extend_raw_buf(32, &b.chunk_hash)
-        .extend_optional_hash(1, b.chunk2_hash)
+        .extend_optional_hash(1, &b.chunk2_hash)
         .extend_raw_buf(32, &b.block_time_history_hash)
         .extend_u64(1, &nonce_info.vdf_difficulty.unwrap_or_default())
         .extend_u64(1, &nonce_info.next_vdf_difficulty.unwrap_or_default());
