@@ -311,7 +311,7 @@ fn test_validator_init() -> bool {
     // println!("{block_height:?}");
     let hash_index: HashIndex = HashIndex::new();
 
-    let client = reqwest::Client::new();
+    //let client = reqwest::Client::new();
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let hash_index = runtime.block_on(hash_index.init()).unwrap();
 

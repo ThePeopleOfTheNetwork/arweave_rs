@@ -6,29 +6,57 @@ use crate::helpers::{DecodeHash, U256};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ArweaveBlockHeader {
-    pub partition_number: u64,
-    pub nonce_limiter_info: NonceLimiterInfo,
+    #[serde(deserialize_with = "parse_string_to_u256")]
+    pub merkle_rebase_support_threshold:U256,
+    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    pub chunk_hash: [u8; 32],
+    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    pub block_time_history_hash: [u8;32],
     #[serde(deserialize_with = "decode_hash_to_bytes")]
     pub hash_preimage: [u8; 32],
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
-    pub previous_block: [u8; 48],
-    pub timestamp: u64,
-    pub last_retarget: u64,
     #[serde(deserialize_with = "parse_string_to_u64")]
     pub recall_byte: u64,
     #[serde(deserialize_with = "parse_string_to_u64")]
     pub reward: u64,
     #[serde(deserialize_with = "decode_hash_to_bytes")]
-    pub chunk_hash: [u8; 32],
-    #[serde(default, deserialize_with = "parse_optional_string_to_u64")]
-    pub recall_byte2: Option<u64>,
+    pub previous_solution_hash: [u8; 32],
+    pub partition_number: u64,
+    pub nonce_limiter_info: NonceLimiterInfo,
+    pub poa2: PoaData,
+    #[serde(deserialize_with = "base64_string_to_bytes")]
+    pub signature: Vec<u8>,
+    #[serde(deserialize_with = "base64_string_to_bytes")]
+    pub reward_key: Vec<u8>,
+    #[serde(deserialize_with = "parse_string_to_u256")]
+    pub price_per_gib_minute: U256,
+    #[serde(deserialize_with = "parse_string_to_u256")]
+    pub scheduled_price_per_gib_minute: U256,
+    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    pub reward_history_hash: [u8; 32],
+    #[serde(deserialize_with = "parse_string_to_u256")]
+    pub debt_supply: U256,
+    #[serde(deserialize_with = "parse_string_to_u256")]
+    pub kryder_plus_rate_multiplier: U256,
+    #[serde(deserialize_with = "parse_string_to_u256")]
+    pub kryder_plus_rate_multiplier_latch: U256,
+    #[serde(deserialize_with = "parse_string_to_u256")]
+    pub denomination: U256,
+    pub redenomination_height: u64,
+    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    pub previous_block: [u8; 48],
+    pub timestamp: u64,
+    pub last_retarget: u64,
+    #[serde(default, deserialize_with = "optional_parse_string_to_U256")]
+    pub recall_byte2: Option<U256>,
     #[serde(default, deserialize_with = "decode_hash_to_bytes")]
     pub chunk2_hash: Option<[u8; 32]>,
     #[serde(deserialize_with = "decode_hash_to_bytes")]
     pub hash: [u8; 32],
-    #[serde(default, deserialize_with = "parse_string_to_u256")]
+    #[serde(deserialize_with = "parse_string_to_u256")]
     pub diff: U256,
     pub height: u64,
+    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    pub indep_hash: [u8; 48],
     #[serde(deserialize_with = "parse_array_of_base64_to_bytes")]
     pub txs: Vec<Vec<u8>>,
     #[serde(deserialize_with = "base64_string_to_bytes")]
@@ -47,14 +75,17 @@ pub struct ArweaveBlockHeader {
     pub weave_size: u64,
     #[serde(deserialize_with = "parse_string_to_u64")]
     pub block_size: u64,
-    #[serde(deserialize_with = "parse_string_to_u64")]
-    pub cumulative_diff: u64,
-    #[serde(deserialize_with = "base64_string_to_bytes")]
-    pub reward_key: Vec<u8>,
+    #[serde(default, deserialize_with = "parse_string_to_u256")]
+    pub cumulative_diff: U256,
+    pub double_signing_proof: DoubleSigningProof,
+    #[serde(deserialize_with = "parse_string_to_u256")]
+    pub previous_cumulative_diff: U256,
     #[serde(deserialize_with = "parse_usd_to_ar_rate")]
     pub usd_to_ar_rate: [u64; 2],
     #[serde(deserialize_with = "parse_usd_to_ar_rate")]
     pub scheduled_usd_to_ar_rate: [u64; 2],
+   
+   
     #[serde(deserialize_with = "parse_string_to_u64")]
     pub packing_2_5_threshold: u64,
     #[serde(deserialize_with = "parse_string_to_u64")]
@@ -62,7 +93,7 @@ pub struct ArweaveBlockHeader {
     #[serde(deserialize_with = "decode_hash_to_bytes")]
     pub hash_list_merkle: [u8; 48],
     pub poa: PoaData,
-    pub poa2: PoaData,
+   
 }
 
 impl Default for ArweaveBlockHeader {
@@ -79,7 +110,7 @@ impl Default for ArweaveBlockHeader {
             recall_byte2: Default::default(),
             chunk2_hash: Default::default(),
             hash: Default::default(),
-            diff: U256::zero(),
+            diff: Default::default(),
             height: Default::default(),
             tx_root: Default::default(),
             reward_addr: Default::default(),
@@ -95,11 +126,26 @@ impl Default for ArweaveBlockHeader {
             packing_2_5_threshold: Default::default(),
             usd_to_ar_rate: Default::default(),
             scheduled_usd_to_ar_rate: Default::default(),
+            reward_history_hash: Default::default(),
+            debt_supply: U256::zero(),
             strict_data_split_threshold: Default::default(),
             txs: Default::default(),
             tags: Default::default(),
             reward: Default::default(),
             reward_key: Default::default(),
+            previous_solution_hash: Default::default(),
+            price_per_gib_minute: Default::default(),
+            scheduled_price_per_gib_minute: Default::default(),
+            kryder_plus_rate_multiplier: Default::default(),
+            kryder_plus_rate_multiplier_latch: Default::default(),
+            denomination: Default::default(),
+            redenomination_height: Default::default(),
+            merkle_rebase_support_threshold: Default::default(),
+            block_time_history_hash:Default::default(),
+            signature: Default::default(),
+            previous_cumulative_diff:  Default::default(),
+            double_signing_proof: Default::default(),
+            indep_hash: [0u8; 48],
         }
     }
 }
@@ -107,12 +153,50 @@ impl Default for ArweaveBlockHeader {
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct PoaData {
     pub option: String,
-    #[serde(deserialize_with = "optional_base64_string_to_bytes")]
-    pub tx_path: Option<Vec<u8>>,
-    #[serde(deserialize_with = "optional_base64_string_to_bytes")]
-    pub data_path: Option<Vec<u8>>,
-    #[serde(deserialize_with = "optional_base64_string_to_bytes")]
-    pub chunk: Option<Vec<u8>>,
+    #[serde(deserialize_with = "base64_string_to_bytes")]
+    pub tx_path: Vec<u8>,
+    #[serde(deserialize_with = "base64_string_to_bytes")]
+    pub data_path: Vec<u8>,
+    #[serde(deserialize_with = "base64_string_to_bytes")]
+    pub chunk: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct DoubleSigningProof {
+    #[serde(default, deserialize_with = "optional_base64_string_to_bytes")]
+    pub pub_key: Option<Vec<u8>>,
+     #[serde(default, deserialize_with = "optional_base64_string_to_bytes")]
+    pub sig1: Option<Vec<u8>>,
+    #[serde(default, deserialize_with = "optional_parse_string_to_U256")]
+    pub cdiff1: Option<U256>,
+    #[serde(default, deserialize_with = "optional_parse_string_to_U256")]
+    pub prev_cdiff1:Option<U256>,
+    #[serde(default, deserialize_with = "optional_decode_hash_to_bytes")]
+    pub preimage1: Option<[u8;32]>,
+     #[serde(default, deserialize_with = "optional_base64_string_to_bytes")]
+    pub sig2: Option<Vec<u8>>,
+    #[serde(default, deserialize_with = "optional_parse_string_to_U256")]
+    pub cdiff2:Option<U256>,
+    #[serde(default, deserialize_with = "optional_parse_string_to_U256")]
+    pub prev_cdiff2:Option<U256>,
+    #[serde(default, deserialize_with = "optional_decode_hash_to_bytes")]
+    pub preimage2: Option<[u8;32]>
+}
+
+impl Default for DoubleSigningProof {
+    fn default() -> Self {
+        DoubleSigningProof {
+            pub_key: Default::default(),
+            sig1: Default::default(),
+            cdiff1: Default::default(),
+            prev_cdiff1: Default::default(),
+            preimage1: Default::default(),
+            sig2: Default::default(),
+            cdiff2: Default::default(),
+            prev_cdiff2: Default::default(),
+            preimage2: Default::default(),
+        }
+    }
 }
 
 /// NonceLImiterInput holds the nonce_limiter_info from the Arweave block header
@@ -130,9 +214,9 @@ pub struct NonceLimiterInfo {
     #[serde(deserialize_with = "decode_hash_to_bytes")]
     pub prev_output: [u8; 32],
     #[serde(deserialize_with = "parse_array_of_hashes_to_bytes")]
-    pub last_step_checkpoints: Vec<[u8;32]>,
+    pub last_step_checkpoints: Vec<[u8; 32]>,
     #[serde(deserialize_with = "parse_array_of_hashes_to_bytes")]
-    pub checkpoints: Vec<[u8;32]>,
+    pub checkpoints: Vec<[u8; 32]>,
     #[serde(default, deserialize_with = "parse_optional_string_to_u64")]
     pub vdf_difficulty: Option<u64>,
     #[serde(default, deserialize_with = "parse_optional_string_to_u64")]
@@ -202,6 +286,23 @@ where
     }
 }
 
+pub fn optional_decode_hash_to_bytes<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: DecodeHash,
+{
+    let opt_val: Option<Value> =
+    Option::deserialize(deserializer).map_err(serde::de::Error::custom)?;
+
+    match opt_val {
+        Some(Value::String(s)) => T::from(&s)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+        Some(_) => Err(serde::de::Error::custom("Invalid optional hash")),
+        None => Ok(None),
+    }
+}
+
 pub fn optional_base64_string_to_bytes<'de, D>(deserializer: D) -> Result<Option<Vec<u8>>, D::Error>
 where
     D: Deserializer<'de>,
@@ -214,6 +315,22 @@ where
             .map(Some)
             .map_err(serde::de::Error::custom),
         Some(_) => Err(serde::de::Error::custom("Invalid type")),
+        None => Ok(None),
+    }
+}
+
+fn optional_parse_string_to_U256<'de, D>(deserializer: D) -> Result<Option<U256>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt_val: Option<Value> =
+    Option::deserialize(deserializer).map_err(serde::de::Error::custom)?;
+
+    match opt_val {
+        Some(Value::String(s)) => U256::from_dec_str(&s)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+        Some(_) => Err(serde::de::Error::custom("Invalid U256 type")),
         None => Ok(None),
     }
 }

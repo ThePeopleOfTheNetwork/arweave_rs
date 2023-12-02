@@ -47,9 +47,9 @@ pub fn compute_mining_hash(
     input.append(&mut vdf_output.to_vec());
 
     let pn:U256 = U256::from(partition_number);
-
     let mut partition_bytes: [u8; 32] = [0u8; 32];
     pn.to_big_endian(&mut partition_bytes);
+    
     input.append(&mut partition_bytes.try_into().unwrap());
 
     input.append(&mut vdf_seed[..32].to_vec()); // Use first 32 bytes of vdf_seed
