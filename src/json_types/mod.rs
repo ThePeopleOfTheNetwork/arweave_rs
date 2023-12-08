@@ -61,8 +61,8 @@ pub struct ArweaveBlockHeader {
     pub txs: Vec<Vec<u8>>,
     #[serde(deserialize_with = "base64_string_to_bytes")]
     pub nonce: Vec<u8>,
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
-    pub tx_root: [u8; 32],
+    #[serde(default, deserialize_with = "decode_hash_to_bytes")]
+    pub tx_root: Option<[u8; 32]>,
     #[serde(deserialize_with = "decode_hash_to_bytes")]
     pub wallet_list: [u8; 48],
     #[serde(deserialize_with = "decode_hash_to_bytes")]
