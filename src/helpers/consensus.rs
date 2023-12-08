@@ -10,7 +10,19 @@ pub const RANDOMX_PACKING_ROUNDS_2_6: usize = 8*45;
 pub const RANDOMX_HASH_SIZE: usize = 32;
 pub const RANDOMX_ENTROPY_SIZE: usize = 256 * 1024; //256KiB
 
+pub const FORK_2_5_HEIGHT: u64 = 812970;
+pub const FORK_2_6_HEIGHT: u64 = 1132210;
 pub const FORK_2_7_HEIGHT: u64 = 1275480;
+
+pub const MIN_SPORA_DIFFICULTY: u64 = 2;
+
+pub const RETARGET_BLOCKS: u64 = 10;
+pub const TARGET_TIME: u64 = 120;
+pub const RETARGET_TOLERANCE_UPPER_BOUND: u64 = (TARGET_TIME * RETARGET_BLOCKS) + TARGET_TIME;
+pub const RETARGET_TOLERANCE_LOWER_BOUND: u64 = (TARGET_TIME * RETARGET_BLOCKS) - TARGET_TIME;
+
+pub const JOIN_CLOCK_TOLERANCE: u64 = 15;
+pub const CLOCK_DRIFT_MAX: u64 = 5;
 
 // The presence of the absolute end offset in the key makes sure packing of 
 // every chunk is unique, even when the same chunk is present in the same 
