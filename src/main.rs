@@ -1,3 +1,4 @@
+use arweave_rs::validator::block;
 use eyre::Result;
 use helpers::{DecodeHash, U256};
 use json_types::{ArweaveBlockHeader, NonceLimiterInfo};
@@ -30,9 +31,13 @@ struct TestContext {
     pub reset_2nd_to_last_case: Vec<NonceLimiterInfo>,
     pub reset_3rd_to_last_case: Vec<NonceLimiterInfo>,
     pub packing_case: (ArweaveBlockHeader, ArweaveBlockHeader),
+    pub poa2_case: (ArweaveBlockHeader, ArweaveBlockHeader),
+    pub no_tx_case: (ArweaveBlockHeader, ArweaveBlockHeader),
+    pub diff_case: (ArweaveBlockHeader, ArweaveBlockHeader),
     pub block1_case: (ArweaveBlockHeader, ArweaveBlockHeader),
     pub block2_case: (ArweaveBlockHeader, ArweaveBlockHeader),
     pub block3_case: (ArweaveBlockHeader, ArweaveBlockHeader),
+
 }
 
 // Static test data for the tests, lazy loaded at runtime.
@@ -57,6 +62,15 @@ lazy_static! {
         let packing_case = parse_block_header_from_file("data/blocks/1287795.json");
         let packing_case_prev = parse_block_header_from_file("data/blocks/1287794.json");
 
+        let poa2_case = parse_block_header_from_file("data/blocks/1315909.json");
+        let poa2_case_prev = parse_block_header_from_file("data/blocks/1315908.json");
+
+        let no_tx_case = parse_block_header_from_file("data/blocks/1315910.json");
+        let no_tx_case_prev = parse_block_header_from_file("data/blocks/1315909.json");
+
+        let diff_case = parse_block_header_from_file("data/blocks/1315850.json");
+        let diff_case_prev = parse_block_header_from_file("data/blocks/1315849.json");
+
         let block1_case = parse_block_header_from_file("data/blocks/1309131.json");
         let block1_case_prev = parse_block_header_from_file("data/blocks/1309130.json");
 
@@ -75,9 +89,12 @@ lazy_static! {
             reset_2nd_to_last_case: vec![reset_2nd_to_last1],
             reset_3rd_to_last_case: vec![reset_3rd_to_last1],
             packing_case: (packing_case, packing_case_prev),
+            poa2_case: (poa2_case, poa2_case_prev),
+            no_tx_case: (no_tx_case, no_tx_case_prev),
+            diff_case: (diff_case, diff_case_prev),
             block1_case: (block1_case, block1_case_prev),
             block2_case: (block2_case, block2_case_prev),
-            block3_case: (block3_case, block3_case_prev)
+            block3_case: (block3_case, block3_case_prev),
         };
         tc
     };
@@ -282,26 +299,12 @@ fn test_randomx_hash_with_entropy() -> bool {
 }
 
 fn test_pre_validation() -> bool {
-    // H0: <<83,14,17,68,209,86,9,9,67,189,54,208,103,124,160,135,95,132,39,244,183,24,107,27,146,127,96,226,180,11,149,132>>
-    // SolutionHash: <<49,138,171,33,24,4,154,44,168,139,61,88,183,119,78,95,203,131,171,84,181,211,59,35,44,116,134,92,141,234,222,76>>
-    // Encoded SolutionHash: <<"MYqrIRgEmiyoiz1Yt3dOX8uDq1S10zsjLHSGXI3q3kw">>
-    // Decoded SolutionHash: 22408335566352399523540813921322114797570619716531381388632873791215228345932
-
-    let (block_header, previous_block_header) = &TEST_DATA.packing_case;
+    let (block_header, previous_block_header) = &TEST_DATA.diff_case;
     let solution_hash = pre_validate_block(block_header, previous_block_header).unwrap();
 
-    //println!("block.hash: {:?}", block_header.hash);
-    // let encoded_solution_hash = base64_url::encode(&solution_hash);
-    // println!("");
-    // println!("SH:{encoded_solution_hash}");
-    // let decoded = base64_url::decode(&block_header.hash).unwrap();
-
     let solution_hash_value_big: U256 = U256::from_big_endian(&solution_hash);
-    // println!("");
-    // println!("BigSh: {solution_hash_value_big}");
 
     let diff: U256 = block_header.diff;
-    // println!("DiffH: {diff}");
 
     solution_hash_value_big > diff
 }
