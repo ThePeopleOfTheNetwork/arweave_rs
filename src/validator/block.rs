@@ -1,4 +1,4 @@
-use crate::helpers::{consensus::*, U256};
+use crate::helpers::{consensus::*, u256};
 use arweave_randomx_rs::*;
 
 pub fn compute_randomx_hash(key:&[u8], input:&[u8]) -> Vec<u8> {
@@ -46,7 +46,7 @@ pub fn compute_mining_hash(
 
     input.append(&mut vdf_output.to_vec());
 
-    let pn:U256 = U256::from(partition_number);
+    let pn:u256 = u256::from(partition_number);
     let mut partition_bytes: [u8; 32] = [0u8; 32];
     pn.to_big_endian(&mut partition_bytes);
     

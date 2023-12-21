@@ -1,8 +1,9 @@
+#![allow(dead_code)]
 use arweave_randomx_rs::{RandomXCache, RandomXFlag, RandomXVM};
 
-use crate::helpers::{U256, consensus::*};
+use crate::helpers::{u256, consensus::*};
 
-pub fn pack_chunk(chunk_offset:U256, reward_address:&[u8;32], tx_root:&[u8;32]) -> Vec<u8> {
+pub fn pack_chunk(chunk_offset:u256, reward_address:&[u8;32], tx_root:&[u8;32]) -> Vec<u8> {
     let key = RANDOMX_PACKING_KEY;
     let flags = RandomXFlag::get_recommended_flags();
     let cache = RandomXCache::new(flags, key).unwrap();

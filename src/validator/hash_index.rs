@@ -5,13 +5,16 @@ use std::io::{self, Read, Seek, SeekFrom, Write};
 use crate::helpers::DecodeHash;
 
 use super::hash_index_scraper::{
-    current_block_height, current_block_height_async, request_indexes, HashIndexJson,
+    current_block_height_async, request_indexes, HashIndexJson,
 };
 
 pub struct HashIndexItem {
     pub block_hash: [u8; 48], // 48 bytes
     pub weave_size: u128,     // 16 bytes
     pub tx_root: [u8; 32],    // 32 bytes
+    // TODO: add height
+    // height: u128 (ar_block_index.erl: 111)
+    // Oh yeah, height is implicit in the indexing of the items
 }
 
 impl HashIndexItem {

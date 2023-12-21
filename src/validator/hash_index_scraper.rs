@@ -1,5 +1,4 @@
 use color_eyre::eyre::eyre;
-use core::num;
 use eyre::{Report, Result};
 use futures::future::try_join_all;
 use reqwest::{header, Client as ReqwestClient, StatusCode};
