@@ -26,4 +26,6 @@ lazy_static = "1.4.0"
 paris = "1.5.15"
 openssl = { version = "0.10.57", features = ["vendored"] }
 arweave-randomx-rs = { path = "../arweave-randomx-rs" }
+borsh = "1.3.0"
+borsh-derive = "1.3.0"
 
