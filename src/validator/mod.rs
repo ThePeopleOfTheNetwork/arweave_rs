@@ -1,30 +1,16 @@
+#![allow(dead_code)]
 use self::block::*;
 use crate::{
-    helpers::{consensus::*, U256},
+    helpers::{consensus::*, u256},
     json_types::{ArweaveBlockHeader, DoubleSigningProof, PoaData},
 };
 use color_eyre::eyre::{eyre, Result};
-use futures::executor::block_on;
 use openssl::sha;
 
 pub mod block;
 pub mod hash_index;
 pub mod hash_index_scraper;
-
-// The original plan was to cap the proof at 262144 (also the maximum chunk size).
-// The maximum tree depth is then (262144 - 64) / (32 + 32 + 32) = 2730.
-// Later we added support for offset rebases by recognizing the extra 32 bytes,
-// possibly at every branching point, as indicating a rebase. To preserve the depth maximum,
-// we now cap the size at 2730 * (96 + 32) + 65 = 349504.
-const MAX_DATA_PATH_SIZE: usize = 349504;
-
-// We may have at most 1000 transactions + 1000 padding nodes => depth=11
-// => at most 11 * 96 + 64 bytes worth of the proof. Due to its small size, we
-// extend it somewhat for better future-compatibility.
-const MAX_TX_PATH_SIZE: usize = 2176;
-
-// Maximum size of a single data chunk, in bytes.
-const DATA_CHUNK_SIZE: usize = 256 * 1024;
+pub mod merkle;
 
 pub fn pre_validate_block(
     block_header: &ArweaveBlockHeader,
@@ -111,15 +97,34 @@ pub fn pre_validate_block(
 
     // Validate "quick" PoW
     let quick_pow_result = quick_pow_is_valid(block_header, previous_block_header);
-    let solution_hash: [u8; 32];
-    match quick_pow_result {
-        Ok(hash) => solution_hash = hash,
+
+    let (mining_hash, solution_hash) = match quick_pow_result {
+        Ok(tuple) => tuple,
         Err(err) => return Err(err),
+    };
+
+    // Validate Nonce Limiter seed data (ar_nonce_limiter:get_seed_data)
+    if !seed_data_is_valid(block_header, previous_block_header) {
+        return Err(eyre!("seed_data is invalid"));
     }
 
-    // Validate nonce limiter info
+    // Nonce Limiter: Block partition number below upper bound
+    if !partition_number_is_valid(block_header) {
+        return Err(eyre!("partition_number is invalid"));
+    }
 
-    // Prevalidate PoA - recall range / chunk etc
+    // Nonce Limiter: Nonce is below Max Nonce limit
+    if !nonce_is_valid(block_header) {
+        return Err(eyre!("nonce is invalid"));
+    }
+
+    // Prevalidate PoA - recall range (mining_hash = H0)
+    if !recall_bytes_is_valid(block_header, &mining_hash) {
+        return Err(eyre!("recall byte 1 or 2 is invalid"));
+    }
+    // (ar_poa.erl) poa.chunk etc - merkle proofs
+
+    // (ar_poa.erl) poa2.chunk  - merkle proofs
 
     Ok(solution_hash)
 }
@@ -143,7 +148,7 @@ fn proof_size_is_valid(poa_data: &PoaData, block_height: u64) -> bool {
 
     tx_path.len() <= MAX_TX_PATH_SIZE
         && data_path.len() <= MAX_DATA_PATH_SIZE
-        && chunk.len() <= DATA_CHUNK_SIZE
+        && chunk.len() <= (DATA_CHUNK_SIZE as usize)
 }
 
 fn chunk_hash_is_valid(chunk_hash: &[u8; 32], chunk: &Vec<u8>, block_height: u64) -> bool {
@@ -179,10 +184,13 @@ fn difficulty_is_valid(
                 if computed_diff == block_header.diff {
                     true
                 } else {
-                    println!("\ncomputed: {}\n  actual: {}", computed_diff, block_header.diff);
+                    println!(
+                        "\ncomputed: {}\n  actual: {}",
+                        computed_diff, block_header.diff
+                    );
                     false
                 }
-            },
+            }
             Err(_) => false,
         }
     } else {
@@ -194,7 +202,7 @@ fn difficulty_is_valid(
 fn calculate_difficulty(
     block_header: &ArweaveBlockHeader,
     previous_block_header: &ArweaveBlockHeader,
-) -> Result<U256> {
+) -> Result<u256> {
     let height = block_header.height;
     let timestamp = block_header.timestamp;
 
@@ -222,8 +230,8 @@ fn calculate_difficulty(
         Ok(previous_diff)
     } else {
         // Calculate a new difficulty
-        let min_diff = U256::from(MIN_SPORA_DIFFICULTY);
-        let max_diff = U256::max_value();
+        let min_diff = u256::from(MIN_SPORA_DIFFICULTY);
+        let max_diff = u256::max_value();
         // We have to + 1 in these equations because MAX_DIFF in erlang is one larger
         // than what will fit in U256::max_value() and would cause integer overflow
         let diff_inverse = ((max_diff - previous_diff + 1) * actual_time) / target_time;
@@ -243,9 +251,9 @@ fn cumulative_diff_is_valid(
 fn compute_cumulative_diff(
     block_header: &ArweaveBlockHeader,
     previous_block_header: &ArweaveBlockHeader,
-) -> U256 {
+) -> u256 {
     // TODO: Make return val a result and check for block height > 2.5 fork
-    let max_diff = U256::max_value();
+    let max_diff = u256::max_value();
     let delta = max_diff / (max_diff - block_header.diff);
     previous_block_header.cumulative_diff + delta
 }
@@ -253,7 +261,7 @@ fn compute_cumulative_diff(
 fn quick_pow_is_valid(
     block_header: &ArweaveBlockHeader,
     previous_block_header: &ArweaveBlockHeader,
-) -> Result<[u8; 32]> {
+) -> Result<([u8; 32], [u8; 32])> {
     // Current block_header properties
     let nonce_limiter_info = &block_header.nonce_limiter_info;
     let vdf_output: [u8; 32] = nonce_limiter_info.output;
@@ -275,15 +283,73 @@ fn quick_pow_is_valid(
     let hash_preimage = block_header.hash_preimage;
     let solution_hash = compute_solution_hash(&mining_hash, &hash_preimage);
 
-    let solution_hash_value_big: U256 = U256::from_big_endian(&solution_hash);
+    let solution_hash_value_big: u256 = u256::from_big_endian(&solution_hash);
 
-    let diff: U256 = block_header.diff;
+    let diff: u256 = block_header.diff;
     if solution_hash_value_big > diff {
-        Ok(solution_hash)
+        Ok((mining_hash, solution_hash))
     } else {
         Err(eyre!(
             "Block solution_hash does not satisfy proof of work difficulty check"
         ))
+    }
+}
+
+fn seed_data_is_valid(
+    block_header: &ArweaveBlockHeader,
+    previous_block_header: &ArweaveBlockHeader,
+) -> bool {
+    let nonce_info = &block_header.nonce_limiter_info;
+    let expected_seed_data = get_seed_data(
+        block_header.nonce_limiter_info.global_step_number,
+        previous_block_header,
+    );
+
+    // Note: next_vdf_difficulty is not checked here as it is a heavier operation
+    if expected_seed_data.seed == nonce_info.seed
+        && expected_seed_data.next_seed == nonce_info.next_seed
+        && expected_seed_data.next_partition_upper_bound == nonce_info.next_zone_upper_bound
+        && expected_seed_data.partition_upper_bound == nonce_info.zone_upper_bound
+        && expected_seed_data.vdf_difficulty == nonce_info.vdf_difficulty.unwrap_or(VDF_SHA_1S)
+    {
+        true
+    } else {
+        println!(
+            "expected seed: {:?}\nfound seed: {:?}",
+            expected_seed_data.seed, nonce_info.seed
+        );
+        false
+    }
+}
+
+fn partition_number_is_valid(block_header: &ArweaveBlockHeader) -> bool {
+    let max = std::cmp::max(
+        0,
+        block_header.nonce_limiter_info.zone_upper_bound / PARTITION_SIZE - 1,
+    );
+    block_header.partition_number <= max
+}
+
+fn nonce_is_valid(block_header: &ArweaveBlockHeader) -> bool {
+    let max = RECALL_RANGE_SIZE / DATA_CHUNK_SIZE - 1;
+    let nonce_value = block_header.nonce as u32;
+    nonce_value < max
+}
+
+fn recall_bytes_is_valid(block_header: &ArweaveBlockHeader, mining_hash: &[u8; 32]) -> bool {
+    let (recall_range1_start, recall_range2_start) = get_recall_range(
+        mining_hash,
+        block_header.partition_number,
+        block_header.nonce_limiter_info.zone_upper_bound,
+    );
+
+    let recall_byte_1 = recall_range1_start + block_header.nonce * DATA_CHUNK_SIZE as u64;
+    let recall_byte_2 = recall_range2_start + block_header.nonce * DATA_CHUNK_SIZE as u64;
+
+    if let Some(b2) = block_header.recall_byte2 {
+        recall_byte_2 == b2 && recall_byte_1 == u256::from(block_header.recall_byte)
+    } else {
+        recall_byte_1 == u256::from(block_header.recall_byte)
     }
 }
 
@@ -318,10 +384,10 @@ impl DoubleSigningProofBytes for DoubleSigningProof {
 trait ExtendBytes {
     fn extend_raw_buf(&mut self, raw_size: usize, val: &[u8]) -> &mut Self;
     fn extend_optional_raw_buf(&mut self, raw_size: usize, val: &Option<Vec<u8>>) -> &mut Self;
-    fn extend_raw_big(&mut self, raw_size: usize, val: &U256) -> &mut Self;
+    fn extend_raw_big(&mut self, raw_size: usize, val: &u256) -> &mut Self;
     fn extend_u64(&mut self, size_bytes: usize, val: &u64) -> &mut Self;
-    fn extend_big(&mut self, size_bytes: usize, val: &U256) -> &mut Self;
-    fn extend_optional_big(&mut self, size_bytes: usize, val: &Option<U256>) -> &mut Self;
+    fn extend_big(&mut self, size_bytes: usize, val: &u256) -> &mut Self;
+    fn extend_optional_big(&mut self, size_bytes: usize, val: &Option<u256>) -> &mut Self;
     fn extend_optional_hash(&mut self, size_bytes: usize, val: &Option<[u8; 32]>) -> &mut Self;
     fn extend_buf(&mut self, size_bytes: usize, val: &[u8]) -> &mut Self;
     fn extend_buf_list(&mut self, size_bytes: usize, val: &Vec<Vec<u8>>) -> &mut Self;
@@ -330,7 +396,7 @@ trait ExtendBytes {
         let mut non_zero_index = slice
             .iter()
             .position(|&x| x != 0)
-            .unwrap_or_else(|| slice.len());
+            .unwrap_or(slice.len());
         non_zero_index = std::cmp::min(non_zero_index, slice.len() - 1);
         &slice[non_zero_index..]
     }
@@ -364,7 +430,7 @@ impl ExtendBytes for Vec<u8> {
         self.extend_raw_buf(raw_size, &bytes)
     }
 
-    fn extend_raw_big(&mut self, raw_size: usize, val: &U256) -> &mut Self {
+    fn extend_raw_big(&mut self, raw_size: usize, val: &u256) -> &mut Self {
         let mut bytes = [0u8; 32];
         val.to_big_endian(&mut bytes);
         self.extend_raw_buf(raw_size, &bytes)
@@ -377,11 +443,11 @@ impl ExtendBytes for Vec<u8> {
         let size_bytes = num_val_bytes.to_be_bytes();
         let start = size_bytes.len().saturating_sub(num_size_bytes);
         self.extend_from_slice(&Vec::from(&size_bytes[start..]));
-        self.extend_from_slice(&bytes[..]);
+        self.extend_from_slice(bytes);
         self
     }
 
-    fn extend_big(&mut self, num_size_bytes: usize, val: &U256) -> &mut Self {
+    fn extend_big(&mut self, num_size_bytes: usize, val: &u256) -> &mut Self {
         let mut be_bytes = [0u8; 32];
         val.to_big_endian(&mut be_bytes);
         let bytes = Self::trim_leading_zero_bytes(&be_bytes);
@@ -389,13 +455,13 @@ impl ExtendBytes for Vec<u8> {
         let size_bytes = num_val_bytes.to_be_bytes();
         let start = size_bytes.len().saturating_sub(num_size_bytes);
         self.extend_from_slice(&Vec::from(&size_bytes[start..]));
-        self.extend_from_slice(&bytes[..]);
+        self.extend_from_slice(bytes);
         self
     }
 
-    fn extend_optional_big(&mut self, size_bytes: usize, val: &Option<U256>) -> &mut Self {
-        if let Some(u256) = val {
-            self.extend_big(size_bytes, &u256)
+    fn extend_optional_big(&mut self, size_bytes: usize, val: &Option<u256>) -> &mut Self {
+        if let Some(big_int) = val {
+            self.extend_big(size_bytes, big_int)
         } else {
             // This will append the correct number of size_bytes to store a size of 0
             self.extend_buf(size_bytes, &[])
@@ -408,7 +474,7 @@ impl ExtendBytes for Vec<u8> {
         let size_bytes = num_val_bytes.to_be_bytes();
         let start = size_bytes.len().saturating_sub(num_size_bytes);
         self.extend_from_slice(&Vec::from(&size_bytes[start..]));
-        self.extend_from_slice(&bytes[..]);
+        self.extend_from_slice(bytes);
         self
     }
 
@@ -456,7 +522,7 @@ fn block_hash_is_valid(block_header: &ArweaveBlockHeader) -> bool {
     let mut buff: Vec<u8> = Vec::new();
     buff.extend_buf(1, &b.previous_block)
         .extend_u64(1, &b.timestamp)
-        .extend_buf(2, &b.nonce)
+        .extend_u64(2, &b.nonce)
         .extend_u64(1, &b.height)
         .extend_buf(2, &diff_bytes)
         .extend_big(2, &b.cumulative_diff)
@@ -515,9 +581,11 @@ fn block_hash_is_valid(block_header: &ArweaveBlockHeader) -> bool {
         .extend_u64(1, &nonce_info.vdf_difficulty.unwrap_or_default())
         .extend_u64(1, &nonce_info.next_vdf_difficulty.unwrap_or_default());
 
-
     // if let Some(i) = first_mismatch_index(&expected, &buff) {
-    //     println!("Found mismatched byte at index: {i} found:{} expected:{}", buff[i], expected[i]);
+    //     println!(
+    //         "Found mismatched byte at index: {i} found:{} expected:{}",
+    //         buff[i], expected[i]
+    //     );
     // }
 
     let mut hasher = sha::Sha256::new();
@@ -529,27 +597,23 @@ fn block_hash_is_valid(block_header: &ArweaveBlockHeader) -> bool {
     hasher.update(&b.signature);
     let hash = hasher.finish();
 
-    println!(
-        "\ntest_hash: {}\nindp_hash: {}",
-        base64_url::encode(&hash),
-        base64_url::encode(&b.indep_hash)
-    );
-
     hash == b.indep_hash
 }
 
 fn is_retarget_height(block_header: &ArweaveBlockHeader) -> bool {
     let height = block_header.height;
-    height % RETARGET_BLOCKS as u64 == 0 && height != 0
+    height % RETARGET_BLOCKS == 0 && height != 0
 }
 
 /// Utility function for debugging
 fn first_mismatch_index(vec1: &[u8], vec2: &[u8]) -> Option<usize> {
-    vec1.iter().zip(vec2.iter()).enumerate().find_map(|(index, (&val1, &val2))| {
-        if val1 != val2 {
-            Some(index)
-        } else {
-            None
-        }
-    })
+    vec1.iter().zip(vec2.iter()).enumerate().find_map(
+        |(index, (&val1, &val2))| {
+            if val1 != val2 {
+                Some(index)
+            } else {
+                None
+            }
+        },
+    )
 }
