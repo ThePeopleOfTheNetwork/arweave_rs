@@ -1,12 +1,8 @@
+#![allow(dead_code)]
 use rayon::prelude::*;
-//use sha2::{Digest, Sha256};
 use openssl::sha;
 
-
-use crate::{json_types::NonceLimiterInfo, helpers::U256};
-
-// 25 checkpoints 40 ms each = 1000 ms
-pub static NUM_CHECKPOINTS_IN_VDF_STEP: usize = 25;
+use crate::{json_types::NonceLimiterInfo, helpers::{u256, consensus::*}};
 
 // erlang consensus constants
 // ================================================
@@ -15,20 +11,6 @@ pub static NUM_CHECKPOINTS_IN_VDF_STEP: usize = 25;
 // const SALT_SIZE: usize = 32;
 // const VDF_SHA_HASH_SIZE: usize = 32;
 
-// Typical ryzen 5900X iterations for 1 sec
-static VDF_SHA_1S: u64 = 15_000_000;
-
-// Reset the nonce limiter (vdf) once every 1200 steps/seconds or every ~20 min
-pub const NONCE_LIMITER_RESET_FREQUENCY: usize = 10 * 120;
-
-/// Takes the `global_step_number` and calculates how many steps previous an
-/// entropy reset would have happened, returning the steps since a reset.
-pub fn get_vdf_steps_since_reset(global_step_number: u64) -> usize {
-    let reset_interval = NONCE_LIMITER_RESET_FREQUENCY as f64;
-    let num_vdf_resets = global_step_number as f64 / reset_interval;
-    let remainder: f64 = num_vdf_resets.fract(); // Capture right of the decimal
-    (remainder * reset_interval).round() as usize
-}
 
 /// Derives a salt value from the step_number for checkpoint hashing
 ///
@@ -78,7 +60,7 @@ pub fn apply_reset_seed(seed: [u8; 32], reset_seed: [u8; 48]) -> [u8; 32] {
     let mut hasher = sha::Sha256::new();
     hasher.update(&seed);
     hasher.update(&reset_hash);
-    hasher.finish().into()
+    hasher.finish()
 }
 
 /// Calculates a VDF checkpoint by sequentially hashing a salt+seed, by the
@@ -95,12 +77,12 @@ pub fn apply_reset_seed(seed: [u8; 32], reset_seed: [u8; 48]) -> [u8; 32] {
 ///
 /// - `Vec<[u8;32]>` A Vec containing the calculated checkpoint hashes `checkpoint_count` in length.
 pub fn vdf_sha2(
-    salt: U256,
+    salt: u256,
     seed: [u8; 32],
     num_checkpoints: usize,
     num_iterations: usize,
 ) -> Vec<[u8; 32]> {
-    let mut local_salt: U256 = salt;
+    let mut local_salt: u256 = salt;
     let mut local_seed: [u8; 32] = seed;
     let mut salt_bytes: [u8; 32] = [0; 32];
     let mut checkpoints: Vec<[u8; 32]> = vec![[0; 32]; num_checkpoints];
@@ -132,7 +114,7 @@ pub fn vdf_sha2(
         }
         
         // Store the result at the correct checkpoint index
-        checkpoints[checkpoint_idx] = hash_bytes.into();
+        checkpoints[checkpoint_idx] = hash_bytes;
 
         // Increment the salt for the next checkpoint calculation
         local_salt = local_salt + 1;
@@ -176,7 +158,7 @@ pub fn last_step_checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
     let mut test: Vec<[u8; 32]> = (0..NUM_CHECKPOINTS_IN_VDF_STEP)
         .into_par_iter()
         .map(|i| {
-            let salt: U256 = (step_number_to_salt_number(global_step_number - 1) + i).into();
+            let salt: u256 = (step_number_to_salt_number(global_step_number - 1) + i).into();
             let res = vdf_sha2(salt, cp[i], 1, num_iterations);
             res[0]
         })
@@ -187,7 +169,7 @@ pub fn last_step_checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
 
     let is_valid =  test == nonce_info.last_step_checkpoints;
 
-    if is_valid == false {
+    if !is_valid {
         // Compare the original list with the calculated one
         let mismatches: Vec<(usize, &[u8;32], &[u8;32])> = nonce_info
             .last_step_checkpoints
@@ -247,7 +229,7 @@ pub fn checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
     let mut test: Vec<[u8; 32]> = (0..steps.len() - 1)
         .into_par_iter()
         .map(|i| {
-            let salt: U256 = (step_number_to_salt_number(start_step_number + i)).into();
+            let salt: u256 = (step_number_to_salt_number(start_step_number + i)).into();
             let mut seed = steps[i];
             if i == reset_index {
                 seed = apply_reset_seed(seed, reset_seed);
@@ -261,7 +243,7 @@ pub fn checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
 
     let is_valid = test == nonce_info.checkpoints;
 
-    if is_valid == false {
+    if !is_valid {
         // Compare the original list with the calculated one
         let mismatches: Vec<(usize, &[u8;32], &[u8;32])> = nonce_info
             .checkpoints
