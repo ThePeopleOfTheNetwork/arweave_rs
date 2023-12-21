@@ -1,6 +1,7 @@
+#![allow(dead_code)]
 use arweave_rs::validator::block;
 use eyre::Result;
-use helpers::{DecodeHash, U256};
+use helpers::{DecodeHash, u256};
 use json_types::{ArweaveBlockHeader, NonceLimiterInfo};
 use lazy_static::lazy_static;
 use packing::pack::pack_chunk;
@@ -37,7 +38,7 @@ struct TestContext {
     pub block1_case: (ArweaveBlockHeader, ArweaveBlockHeader),
     pub block2_case: (ArweaveBlockHeader, ArweaveBlockHeader),
     pub block3_case: (ArweaveBlockHeader, ArweaveBlockHeader),
-
+    pub reset_case2: (ArweaveBlockHeader, ArweaveBlockHeader),
 }
 
 // Static test data for the tests, lazy loaded at runtime.
@@ -80,6 +81,8 @@ lazy_static! {
         let block3_case = parse_block_header_from_file("data/blocks/1309705.json");
         let block3_case_prev = parse_block_header_from_file("data/blocks/1309704.json");
 
+        let reset_case2 = parse_block_header_from_file("data/blocks/1325673.json");
+        let reset_case2_prev = parse_block_header_from_file("data/blocks/1325672.json");
 
         let tc:TestContext = TestContext {
             base_case: vec![base1, base2],
@@ -95,6 +98,7 @@ lazy_static! {
             block1_case: (block1_case, block1_case_prev),
             block2_case: (block2_case, block2_case_prev),
             block3_case: (block3_case, block3_case_prev),
+            reset_case2: (reset_case2, reset_case2_prev),
         };
         tc
     };
@@ -222,10 +226,10 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-const ENCODED_KEY: &'static str = "UbkeSd5Det8s6uLyuNJwCDFOZMQFa2zvsdKJ0k694LM";
-const ENCODED_HASH: &'static str = "QQYWA46qnFENL4OTQdGU8bWBj5OKZ2OOPyynY3izung";
-const ENCODED_NONCE: &'static str = "f_z7RLug8etm3SrmRf-xPwXEL0ZQ_xHng2A5emRDQBw";
-const ENCODED_SEGMENT: &'static str =
+const ENCODED_KEY: &str = "UbkeSd5Det8s6uLyuNJwCDFOZMQFa2zvsdKJ0k694LM";
+const ENCODED_HASH: &str = "QQYWA46qnFENL4OTQdGU8bWBj5OKZ2OOPyynY3izung";
+const ENCODED_NONCE: &str = "f_z7RLug8etm3SrmRf-xPwXEL0ZQ_xHng2A5emRDQBw";
+const ENCODED_SEGMENT: &str =
     "7XM3fgTCAY2GFpDjPZxlw4yw5cv8jNzZSZawywZGQ6_Ca-JDy2nX_MC2vjrIoDGp";
 
 fn test_randomx_hash() -> bool {
@@ -273,19 +277,19 @@ fn test_randomx_hash_with_entropy() -> bool {
     let key: [u8; 32] = DecodeHash::from(ENCODED_KEY).unwrap();
     let nonce: [u8; 32] = DecodeHash::from(ENCODED_NONCE).unwrap();
     let segment: [u8; 48] = DecodeHash::from(ENCODED_SEGMENT).unwrap();
-    let expected_hash: [u8; 32] = DecodeHash::from(ENCODED_HASH).unwrap();
+    let _expected_hash: [u8; 32] = DecodeHash::from(ENCODED_HASH).unwrap();
 
     let mut input = Vec::new();
     input.append(&mut nonce.to_vec());
     input.append(&mut segment.to_vec());
 
-    let (hash, entropy) = compute_randomx_hash_with_entropy(&key, &input);
+    let (_hash, entropy) = compute_randomx_hash_with_entropy(&key, &input);
 
     // Slice the first 32 bytes (256 bits)
     let first_256_bits = &entropy[0..32];
 
     // Encode the first 256 bits to base64
-    let encoded = base64_url::encode(first_256_bits);
+    let _encoded = base64_url::encode(first_256_bits);
     //println!("{encoded:?}");
 
     let expected_entropy = parse_encoded_bytes_from_file("data/entropy/randomx_entropy.dat");
@@ -299,12 +303,12 @@ fn test_randomx_hash_with_entropy() -> bool {
 }
 
 fn test_pre_validation() -> bool {
-    let (block_header, previous_block_header) = &TEST_DATA.diff_case;
+    let (block_header, previous_block_header) = &TEST_DATA.reset_case2;
     let solution_hash = pre_validate_block(block_header, previous_block_header).unwrap();
 
-    let solution_hash_value_big: U256 = U256::from_big_endian(&solution_hash);
+    let solution_hash_value_big: u256 = u256::from_big_endian(&solution_hash);
 
-    let diff: U256 = block_header.diff;
+    let diff: u256 = block_header.diff;
 
     solution_hash_value_big > diff
 }
@@ -327,7 +331,7 @@ fn test_validator_index_jsons() -> bool {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let result = runtime
         .block_on(request_hash_index_jsons(
-            "http://188.166.200.45:1984".into(),
+            "http://188.166.200.45:1984",
             1288400u64,
             1288509u64,
             &client,
