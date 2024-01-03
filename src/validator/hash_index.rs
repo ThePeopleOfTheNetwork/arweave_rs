@@ -2,19 +2,25 @@ use color_eyre::eyre::{eyre, Result};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 
-use crate::helpers::DecodeHash;
+use crate::helpers::{u256, DecodeHash};
 
-use super::hash_index_scraper::{
-    current_block_height_async, request_indexes, HashIndexJson,
-};
+use super::hash_index_scraper::{current_block_height_async, request_indexes, HashIndexJson};
 
 pub struct HashIndexItem {
     pub block_hash: [u8; 48], // 48 bytes
     pub weave_size: u128,     // 16 bytes
     pub tx_root: [u8; 32],    // 32 bytes
-    // TODO: add height
-    // height: u128 (ar_block_index.erl: 111)
-    // Oh yeah, height is implicit in the indexing of the items
+                              // TODO: add height
+                              // height: u128 (ar_block_index.erl: 111)
+                              // Oh yeah, height is implicit in the indexing of the items
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct BlockBounds {
+    pub height: u128,
+    pub block_start_offset: u128,
+    pub block_end_offset: u128,
+    pub tx_root: [u8; 32],
 }
 
 impl HashIndexItem {
@@ -27,7 +33,7 @@ impl HashIndexItem {
             .map_err(|e| eyre!("Failed to parse weave_size: {}", e))?;
 
         let mut tx_root = [0u8; 32];
-        if json.tx_root.len() > 0 {
+        if !json.tx_root.is_empty() {
             tx_root = DecodeHash::from(&json.tx_root)
                 .map_err(|e| eyre!("Failed to decode tx_root: {}", e))?;
         }
@@ -52,6 +58,13 @@ pub struct HashIndex<State = Uninitialized> {
     indexes: Vec<HashIndexItem>,
 }
 
+impl Default for HashIndex<Uninitialized> {
+    fn default() -> Self {
+        HashIndex::new()
+    }
+}
+
+/// Use a Type State pattern for HashIndex with two states, Uninitialized and Initialized
 impl HashIndex {
     pub fn new() -> Self {
         HashIndex {
@@ -108,7 +121,7 @@ impl HashIndex<Uninitialized> {
         // Make concurrent requests to retrieve the batches of indexes. Utilize
         // exponential backoff when getting 429 (Too Many Requests) responses.
         let index_jsons =
-            request_indexes("http://188.166.200.45:1984".into(), &start_block_heights).await?;
+            request_indexes("http://188.166.200.45:1984", &start_block_heights).await?;
 
         // Once the batches have completed, write them  to the hash_index
         // transforming the JSONS to bytes so they take up less space on disk
@@ -116,7 +129,7 @@ impl HashIndex<Uninitialized> {
         let index_items = index_jsons
             .iter()
             .flatten()
-            .map(|json_item| HashIndexItem::from(json_item))
+            .map(HashIndexItem::from)
             .collect::<Result<Vec<HashIndexItem>>>()
             .unwrap();
 
@@ -135,13 +148,52 @@ impl HashIndex<Uninitialized> {
 }
 
 impl HashIndex<Initialized> {
-    pub fn num_indexes(self) -> u64 {
+    pub fn num_indexes(&self) -> u64 {
         self.indexes.len() as u64
+    }
+
+    pub fn get_item(&self, index: usize) -> Option<&HashIndexItem> {
+        self.indexes.get(index)
+    }
+
+    pub fn get_block_bounds(&self, recall_byte: u128) -> BlockBounds {
+        let mut block_bounds: BlockBounds = Default::default();
+
+        let result = self.get_hash_index_item(recall_byte);
+        if let Ok((index, found_item)) = result {
+            println!("{index} {}", found_item.weave_size);
+            let previous_item = self.get_item(index - 1).unwrap();
+            block_bounds.block_start_offset = previous_item.weave_size;
+            block_bounds.block_end_offset = found_item.weave_size;
+            block_bounds.tx_root = found_item.tx_root;
+            block_bounds.height = (index + 1) as u128;
+        }
+        block_bounds
+    }
+
+    fn get_hash_index_item(&self, recall_byte: u128) -> Result<(usize, &HashIndexItem)> {
+        let result = self.indexes.binary_search_by(|item| {
+            if recall_byte < item.weave_size {
+                std::cmp::Ordering::Greater
+            } else {
+                std::cmp::Ordering::Less
+            }
+        });
+
+        // It's the nature of binary_search_bh to return Err if it doesn't find 
+        // an exact match. We are looking for the position of the closest element
+        // so we ignore the Result enum values and extract the pos return val.
+        let index = match result {
+            Ok(pos) => pos,
+            Err(pos) => pos,
+        };
+
+        Ok((index, &self.indexes[index]))
     }
 }
 
 impl HashIndexItem {
-    // Serialize the HashIndexItem to bytesß
+    // Serialize the HashIndexItem to bytes
     fn to_bytes(&self) -> [u8; 48 + 16 + 32] {
         let mut bytes = [0u8; 48 + 16 + 32];
         bytes[0..48].copy_from_slice(&self.block_hash);

@@ -4,7 +4,6 @@ use color_eyre::eyre::eyre;
 use eyre::Error;
 use openssl::sha;
 
-
 /// Single struct used for original data chunks (Leaves) and branch nodes (hashes of pairs of child nodes).
 #[derive(Debug, PartialEq, Clone)]
 pub struct Node {
@@ -85,6 +84,143 @@ impl Helpers<usize> for usize {
     }
 }
 
+pub struct ValidatePathResult {
+    pub leaf_hash: [u8; HASH_SIZE],
+    pub left_bound: u128,
+    pub right_bound: u128,
+}
+
+pub fn validate_path(
+    mut root_hash: [u8; HASH_SIZE],
+    path_buff: &Vec<u8>,
+    target_offset: u128,
+) -> Result<ValidatePathResult, Error> {
+    // Split proof into branches and leaf. Leaf is the final proof and branches 
+    // are ordered from root to leaf.
+    let (branches, leaf) = path_buff.split_at(path_buff.len() - HASH_SIZE - NOTE_SIZE);
+
+    // Deserialize proof.
+    let branch_proofs: Vec<BranchProof> = branches
+        .chunks(HASH_SIZE * 2 + NOTE_SIZE)
+        .map(|b| BranchProof::try_from_proof_slice(b).unwrap())
+        .collect();
+    let leaf_proof = LeafProof::try_from_proof_slice(leaf)?;
+
+    let mut left_bound: u128 = 0;
+    let mut expected_path_hash = root_hash;
+
+    // Validate branches.
+    for branch_proof in branch_proofs.iter() {
+        // Calculate the path_hash from the proof elements.
+        let path_hash = hash_all_sha256(vec![
+            &branch_proof.left_id,
+            &branch_proof.right_id,
+            &branch_proof.offset().to_note_vec(),
+        ])?;
+
+        // Proof is invalid if the calculated path_hash doesn't match expected
+        if path_hash != expected_path_hash {
+            return Err(eyre!("Invalid Branch Proof"));
+        }
+
+        let offset = branch_proof.offset() as u128;
+        let is_right_of_offset = target_offset > offset;
+
+        // Choose the next expected_path_hash based on weather the target_offset
+        // byte is to the left or right of the branch_proof's "offset" value
+        expected_path_hash = match is_right_of_offset {
+            true => branch_proof.right_id,
+            false => branch_proof.left_id,
+        };
+
+        // Keep track of left bound as we traverse down the branches
+        if is_right_of_offset {
+            left_bound = offset;
+        }
+
+        println!(
+            "{}",
+            format!(
+                "BranchProof: left: {}{}, right: {}{},offset: {} => path_hash: {}",
+                if is_right_of_offset { "" } else { "✅" },
+                base64_url::encode(&branch_proof.left_id),
+                if is_right_of_offset { "✅" } else { "" },
+                base64_url::encode(&branch_proof.right_id),
+                branch_proof.offset(),
+                base64_url::encode(&path_hash)
+            )
+        );
+    }
+    println!(
+        "  LeafProof: data_hash: {}, offset: {}",
+        base64_url::encode(&leaf_proof.data_hash),
+        usize::from_be_bytes(leaf_proof.offset)
+    );
+
+    // Proof nodes (including leaf nodes) always contain their right bound
+    let right_bound = leaf_proof.offset() as u128;
+
+    Ok(ValidatePathResult {
+        leaf_hash: leaf_proof.data_hash,
+        left_bound: left_bound,
+        right_bound: right_bound,
+    })
+}
+
+pub fn print_debug(proof: &Vec<u8>, target_offset: u128) -> Result<([u8; 32], u128, u128), Error> {
+    // Split proof into branches and leaf. Leaf is at the end and branches are
+    // ordered from root to leaf.
+    let (branches, leaf) = proof.split_at(proof.len() - HASH_SIZE - NOTE_SIZE);
+
+    // Deserialize proof.
+    let branch_proofs: Vec<BranchProof> = branches
+        .chunks(HASH_SIZE * 2 + NOTE_SIZE)
+        .map(|b| BranchProof::try_from_proof_slice(b).unwrap())
+        .collect();
+    let leaf_proof = LeafProof::try_from_proof_slice(leaf)?;
+
+    let mut left_bound: u128 = 0;
+
+    // Validate branches.
+    for branch_proof in branch_proofs.iter() {
+        // Calculate the id from the proof.
+        let path_hash = hash_all_sha256(vec![
+            &branch_proof.left_id,
+            &branch_proof.right_id,
+            &branch_proof.offset().to_note_vec(),
+        ])?;
+
+        let offset = branch_proof.offset() as u128;
+        let is_right_of_offset = target_offset > offset;
+
+        // Keep track of left and right bounds as we traverse down the proof
+        if is_right_of_offset {
+            left_bound = offset;
+        }
+
+        println!(
+            "{}",
+            format!(
+                "BranchProof: left: {}{}, right: {}{},offset: {} => path_hash: {}",
+                if is_right_of_offset { "" } else { "✅" },
+                base64_url::encode(&branch_proof.left_id),
+                if is_right_of_offset { "✅" } else { "" },
+                base64_url::encode(&branch_proof.right_id),
+                branch_proof.offset(),
+                base64_url::encode(&path_hash)
+            )
+        );
+    }
+    println!(
+        "  LeafProof: data_hash: {}, offset: {}",
+        base64_url::encode(&leaf_proof.data_hash),
+        usize::from_be_bytes(leaf_proof.offset)
+    );
+
+    let right_bound = leaf_proof.offset() as u128;
+    Ok((leaf_proof.data_hash, left_bound, right_bound))
+}
+
 /// Validates chunk of data against provided [`Proof`].
 pub fn validate_chunk(
     mut root_id: [u8; HASH_SIZE],
@@ -120,8 +256,8 @@ pub fn validate_chunk(
                 ])?;
 
                 // Ensure calculated id correct.
-                if !(id == root_id) {
-                    return Err(eyre!("Invalid Proof"));
+                if id != root_id {
+                    return Err(eyre!("Invalid Branch Proof"));
                 }
 
                 // If the offset from the proof is greater than the offset in the data chunk,
@@ -134,8 +270,8 @@ pub fn validate_chunk(
 
             // Validate leaf: both id and data_hash are correct.
             let id = hash_all_sha256(vec![&data_hash, &max_byte_range.to_note_vec()])?;
-            if !(id == root_id) & !(data_hash == leaf_proof.data_hash) {
-                return Err(eyre!("Invalid Proof"));
+            if (id != root_id) && (data_hash != leaf_proof.data_hash) {
+                return Err(eyre!("Invalid Leaf Proof"));
             }
         }
         _ => {
@@ -146,9 +282,9 @@ pub fn validate_chunk(
 }
 
 pub fn hash_sha256(message: &[u8]) -> Result<[u8; 32], Error> {
-	let mut hasher = sha::Sha256::new();
-	hasher.update(message);
-	let result = hasher.finish();
+    let mut hasher = sha::Sha256::new();
+    hasher.update(message);
+    let result = hasher.finish();
     Ok(result)
 }
 
@@ -156,9 +292,7 @@ pub fn hash_sha256(message: &[u8]) -> Result<[u8; 32], Error> {
 pub fn hash_all_sha256(messages: Vec<&[u8]>) -> Result<[u8; 32], Error> {
     let hash: Vec<u8> = messages
         .into_iter()
-        .map(|m| hash_sha256(m).unwrap())
-        .into_iter()
-        .flatten()
+        .flat_map(|m| hash_sha256(m).unwrap())
         .collect();
     let hash = hash_sha256(&hash)?;
     Ok(hash)

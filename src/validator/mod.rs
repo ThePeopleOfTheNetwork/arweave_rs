@@ -1,8 +1,12 @@
 #![allow(dead_code)]
-use self::block::*;
+use self::{
+    block::*,
+    hash_index::{HashIndex, Initialized},
+};
 use crate::{
     helpers::{consensus::*, u256},
     json_types::{ArweaveBlockHeader, DoubleSigningProof, PoaData},
+    validator::{hash_index::HashIndexItem, merkle::validate_path},
 };
 use color_eyre::eyre::{eyre, Result};
 use openssl::sha;
@@ -15,6 +19,7 @@ pub mod merkle;
 pub fn pre_validate_block(
     block_header: &ArweaveBlockHeader,
     previous_block_header: &ArweaveBlockHeader,
+    hash_index: &HashIndex<Initialized>,
 ) -> Result<[u8; 32]> {
     // =========================================================================
     // Arweave 2.7 checks
@@ -41,7 +46,7 @@ pub fn pre_validate_block(
 
     // Validate the chunk_hash to see if it matches the poa chunk
     let chunk = &block_header.poa.chunk;
-    if !chunk_hash_is_valid(&block_header.chunk_hash, &chunk, block_height) {
+    if !chunk_hash_is_valid(&block_header.chunk_hash, chunk, block_height) {
         return Err(eyre!("chunk_hash does not match poa.chunk bytes"));
     }
 
@@ -49,7 +54,7 @@ pub fn pre_validate_block(
     if block_header.chunk2_hash.is_some() {
         let chunk = &block_header.poa2.chunk;
         let chunk2_hash = block_header.chunk2_hash.unwrap_or_default();
-        if !chunk_hash_is_valid(&chunk2_hash, &chunk, block_height) {
+        if !chunk_hash_is_valid(&chunk2_hash, chunk, block_height) {
             return Err(eyre!("chunk2_hash does not match poa2.chunk bytes"));
         }
     }
@@ -119,12 +124,24 @@ pub fn pre_validate_block(
     }
 
     // Prevalidate PoA - recall range (mining_hash = H0)
-    if !recall_bytes_is_valid(block_header, &mining_hash) {
-        return Err(eyre!("recall byte 1 or 2 is invalid"));
-    }
+    let (recall_byte_1, recall_byte_2) = match recall_bytes_is_valid(block_header, &mining_hash) {
+        Ok(tuple) => tuple,
+        Err(err) => return Err(err),
+    };
+
+    let num_items: usize = hash_index.num_indexes() as usize;
+    let last_item: &HashIndexItem = hash_index.get_item(num_items - 1).unwrap();
+    println!("last: {}", last_item.weave_size);
+
     // (ar_poa.erl) poa.chunk etc - merkle proofs
+    if !poa_is_valid(&block_header.poa, recall_byte_1, hash_index) {
+        return Err(eyre!("poa is invalid"));
+    }
 
     // (ar_poa.erl) poa2.chunk  - merkle proofs
+    // if !poa_is_valid(&block_header.poa2, recall_byte_2, hash_index) {
+    //     return Err(eyre!("poa2 is invalid"));
+    // }
 
     Ok(solution_hash)
 }
@@ -133,7 +150,7 @@ pub fn compute_solution_hash(mining_hash: &[u8; 32], hash_preimage: &[u8]) -> [u
     let mut hasher = sha::Sha256::new();
     hasher.update(mining_hash);
     hasher.update(hash_preimage);
-    hasher.finish().into()
+    hasher.finish()
 }
 
 fn proof_size_is_valid(poa_data: &PoaData, block_height: u64) -> bool {
@@ -151,7 +168,7 @@ fn proof_size_is_valid(poa_data: &PoaData, block_height: u64) -> bool {
         && chunk.len() <= (DATA_CHUNK_SIZE as usize)
 }
 
-fn chunk_hash_is_valid(chunk_hash: &[u8; 32], chunk: &Vec<u8>, block_height: u64) -> bool {
+fn chunk_hash_is_valid(chunk_hash: &[u8; 32], chunk: &[u8], block_height: u64) -> bool {
     if block_height < FORK_2_7_HEIGHT {
         return true;
     }
@@ -336,7 +353,10 @@ fn nonce_is_valid(block_header: &ArweaveBlockHeader) -> bool {
     nonce_value < max
 }
 
-fn recall_bytes_is_valid(block_header: &ArweaveBlockHeader, mining_hash: &[u8; 32]) -> bool {
+fn recall_bytes_is_valid(
+    block_header: &ArweaveBlockHeader,
+    mining_hash: &[u8; 32],
+) -> Result<(u256, u256)> {
     let (recall_range1_start, recall_range2_start) = get_recall_range(
         mining_hash,
         block_header.partition_number,
@@ -347,10 +367,87 @@ fn recall_bytes_is_valid(block_header: &ArweaveBlockHeader, mining_hash: &[u8; 3
     let recall_byte_2 = recall_range2_start + block_header.nonce * DATA_CHUNK_SIZE as u64;
 
     if let Some(b2) = block_header.recall_byte2 {
-        recall_byte_2 == b2 && recall_byte_1 == u256::from(block_header.recall_byte)
+        if recall_byte_2 == b2 && recall_byte_1 == u256::from(block_header.recall_byte) {
+            Ok((recall_byte_1, recall_byte_2))
+        } else {
+            Err(eyre!("invalid recall byte 2"))
+        }
     } else {
-        recall_byte_1 == u256::from(block_header.recall_byte)
+        if recall_byte_1 == u256::from(block_header.recall_byte) {
+            Ok((recall_byte_1, recall_byte_2))
+        } else {
+            Err(eyre!("invalid recall byte 1"))
+        }
     }
+}
+
+fn poa_is_valid(
+    poa_data: &PoaData,
+    recall_byte: u256,
+    hash_index: &HashIndex<Initialized>,
+) -> bool {
+    // Use the hash_index to look up the BlockStart, BlockEnd, and tx_root
+    let block_bounds = hash_index.get_block_bounds(recall_byte.as_u128());
+    let start = block_bounds.block_start_offset;
+    let end = block_bounds.block_end_offset;
+
+    // Test to see if the recall byte chunk index is between the start and end
+    // chunk offsets of the block
+    if (start..=end).contains(&recall_byte.as_u128()) {
+        println!(
+            "recall_byte falls within block_bounds {}..{}",
+            block_bounds.block_start_offset, block_bounds.block_end_offset
+        );
+    } else {
+        return false;
+    }
+
+    //let block_size = block_bounds.block_end_offset - block_bounds.block_start_offset;
+    let byte_offset_in_block = (recall_byte - block_bounds.block_start_offset).as_u128();
+    println!(
+        "tx_root: {:?} target_offset_in_block: {byte_offset_in_block}",
+        base64_url::encode(&block_bounds.tx_root)
+    );
+
+    let tx_path_result = match validate_path(
+        block_bounds.tx_root,
+        &poa_data.tx_path,
+        byte_offset_in_block,
+    ) {
+        Ok(result) => result,
+        Err(_) => return false,
+    };
+
+    // Find the offset of the recall byte relative to a specific TX
+    let byte_offset_in_tx = byte_offset_in_block - tx_path_result.left_bound as u128;
+    let tx_start = 0;
+    let tx_end = tx_path_result.right_bound - tx_path_result.left_bound;
+    println!("tx_start: {tx_start} tx_end: {tx_end}");
+
+    // Test to see if the byte falls within the bounds of the tx
+    if (tx_start..=tx_end).contains(&byte_offset_in_tx) {
+        println!("recall_byte falls within tx_bounds {tx_start}..={tx_end}");
+    } else {
+        return false;
+    }
+
+    // The leaf proof in the tx_path is the root of the data_path
+    let _data_path_result = match validate_path(
+        tx_path_result.leaf_hash,
+        &poa_data.data_path,
+        byte_offset_in_tx,
+    ) {
+        Ok(result) => result,
+        Err(_) => return false,
+    };
+
+    // TODO: Create packed entropy scratchpad for the chunk + reward_address
+
+    // TODO: Use a feistel cypher + entropy to decode the chunk
+
+    // TODO: Hash the decoded chunk to see if it matches the data_path.leaf_hash
+
+    true
 }
 
 trait DoubleSigningProofBytes {
@@ -390,13 +487,10 @@ trait ExtendBytes {
     fn extend_optional_big(&mut self, size_bytes: usize, val: &Option<u256>) -> &mut Self;
     fn extend_optional_hash(&mut self, size_bytes: usize, val: &Option<[u8; 32]>) -> &mut Self;
     fn extend_buf(&mut self, size_bytes: usize, val: &[u8]) -> &mut Self;
-    fn extend_buf_list(&mut self, size_bytes: usize, val: &Vec<Vec<u8>>) -> &mut Self;
-    fn extend_hash_list(&mut self, val: &Vec<[u8; 32]>) -> &mut Self;
+    fn extend_buf_list(&mut self, size_bytes: usize, val: &[Vec<u8>]) -> &mut Self;
+    fn extend_hash_list(&mut self, val: &[[u8; 32]]) -> &mut Self;
     fn trim_leading_zero_bytes(slice: &[u8]) -> &[u8] {
-        let mut non_zero_index = slice
-            .iter()
-            .position(|&x| x != 0)
-            .unwrap_or(slice.len());
+        let mut non_zero_index = slice.iter().position(|&x| x != 0).unwrap_or(slice.len());
         non_zero_index = std::cmp::min(non_zero_index, slice.len() - 1);
         &slice[non_zero_index..]
     }
@@ -486,7 +580,7 @@ impl ExtendBytes for Vec<u8> {
         self.extend_buf(size_bytes, &bytes)
     }
 
-    fn extend_buf_list(&mut self, size_bytes: usize, data: &Vec<Vec<u8>>) -> &mut Self {
+    fn extend_buf_list(&mut self, size_bytes: usize, data: &[Vec<u8>]) -> &mut Self {
         // Number of elements in the list, as 2 bytes
         let num_elements = data.len() as u16;
         self.extend_from_slice(&num_elements.to_be_bytes());
@@ -497,7 +591,7 @@ impl ExtendBytes for Vec<u8> {
         self
     }
 
-    fn extend_hash_list(&mut self, data: &Vec<[u8; 32]>) -> &mut Self {
+    fn extend_hash_list(&mut self, data: &[[u8; 32]]) -> &mut Self {
         // Number of hashes in the list, as 2 bytes
         let num_elements = data.len() as u16;
         self.extend_from_slice(&num_elements.to_be_bytes());
