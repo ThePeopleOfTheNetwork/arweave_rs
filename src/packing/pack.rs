@@ -19,7 +19,7 @@ pub fn pack_chunk(chunk_offset:u256, reward_address:&[u8;32], tx_root:&[u8;32]) 
     for i in 0..10.min(entropy.len()) {
         println!("{}", entropy[i]);
     }
-		entropy
+	entropy
 }
 
 //pub fn unpack_chunk() {}

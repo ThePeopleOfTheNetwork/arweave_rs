@@ -161,7 +161,7 @@ pub struct PoaData {
     pub chunk: Vec<u8>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Default, Clone, Debug, Deserialize)]
 pub struct DoubleSigningProof {
     #[serde(default, deserialize_with = "optional_base64_string_to_bytes")]
     pub pub_key: Option<Vec<u8>>,
@@ -181,22 +181,6 @@ pub struct DoubleSigningProof {
     pub prev_cdiff2:Option<u256>,
     #[serde(default, deserialize_with = "optional_decode_hash_to_bytes")]
     pub preimage2: Option<[u8;32]>
-}
-
-impl Default for DoubleSigningProof {
-    fn default() -> Self {
-        DoubleSigningProof {
-            pub_key: Default::default(),
-            sig1: Default::default(),
-            cdiff1: Default::default(),
-            prev_cdiff1: Default::default(),
-            preimage1: Default::default(),
-            sig2: Default::default(),
-            cdiff2: Default::default(),
-            prev_cdiff2: Default::default(),
-            preimage2: Default::default(),
-        }
-    }
 }
 
 /// NonceLImiterInput holds the nonce_limiter_info from the Arweave block header
@@ -447,12 +431,12 @@ fn vec_to_u64_be(bytes: &Vec<u8>) -> Result<u64, &'static str> {
         2 => Ok(u16::from_be_bytes([bytes[0], bytes[1]]) as u64),
         3 => {
             let mut arr = [0u8; 4];
-            arr[1..4].copy_from_slice(&bytes);
+            arr[1..4].copy_from_slice(bytes);
             Ok(u32::from_be_bytes(arr) as u64)
         },
         4 => {
             let mut arr = [0u8; 4];
-            arr[0..4].copy_from_slice(&bytes);
+            arr[0..4].copy_from_slice(bytes);
             Ok(u32::from_be_bytes(arr) as u64)
         },
         _ => Err("Vec<u8> must have 1, 2, 3, or 4 bytes")

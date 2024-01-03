@@ -76,7 +76,7 @@ pub fn get_chunk_entropy_input(
     hasher.update(&chunk_offset_bytes);
     hasher.update(tx_root);
     hasher.update(reward_address);
-    hasher.finish().into()
+    hasher.finish()
 }
 
 /// Takes the `global_step_number` and calculates how many steps previous an

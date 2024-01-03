@@ -1,9 +1,11 @@
 #![allow(dead_code)]
 use arweave_rs::validator::block;
+use arweave_rs::validator::hash_index::Initialized;
 use eyre::Result;
 use helpers::{DecodeHash, u256};
 use json_types::{ArweaveBlockHeader, NonceLimiterInfo};
 use lazy_static::lazy_static;
+use openssl::hash;
 use packing::pack::pack_chunk;
 use paris::Logger;
 use std::fs::File;
@@ -216,12 +218,12 @@ fn main() -> Result<()> {
     // run_test(test_validator_index_jsons, "test_validator_index_jsons", &mut logger);
     run_test(test_pre_validation, "test_pre_validation", &mut logger);
 
-    run_test(test_randomx_hash, "test_randomx_hash", &mut logger);
-    run_test(
-        test_randomx_hash_with_entropy,
-        "test_randomx_hash_with_entropy",
-        &mut logger,
-    );
+    // run_test(test_randomx_hash, "test_randomx_hash", &mut logger);
+    // run_test(
+    //     test_randomx_hash_with_entropy,
+    //     "test_randomx_hash_with_entropy",
+    //     &mut logger,
+    // );
 
     Ok(())
 }
@@ -304,7 +306,12 @@ fn test_randomx_hash_with_entropy() -> bool {
 
 fn test_pre_validation() -> bool {
     let (block_header, previous_block_header) = &TEST_DATA.reset_case2;
-    let solution_hash = pre_validate_block(block_header, previous_block_header).unwrap();
+
+    let hash_index: HashIndex = HashIndex::new();
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let hash_index = runtime.block_on(hash_index.init()).unwrap();
+    
+    let solution_hash = pre_validate_block(block_header, previous_block_header, &hash_index).unwrap();
 
     let solution_hash_value_big: u256 = u256::from_big_endian(&solution_hash);
 

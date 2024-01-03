@@ -25,7 +25,7 @@ pub async fn request_indexes(
     start_block_heights: &Vec<(u64, u64)>,
 ) -> Result<Vec<Vec<HashIndexJson>>> {
     let client = ReqwestClient::new();
-    let requests = start_block_heights.into_iter().map(|bh| {
+    let requests = start_block_heights.iter().map(|bh| {
         let (start_block_height, num_indexes) = bh;
         let end_block_height = start_block_height + num_indexes;
         request_hash_index_jsons(node_url, *start_block_height, end_block_height, &client)
