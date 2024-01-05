@@ -91,11 +91,11 @@ pub struct ValidatePathResult {
 }
 
 pub fn validate_path(
-    mut root_hash: [u8; HASH_SIZE],
+    root_hash: [u8; HASH_SIZE],
     path_buff: &Vec<u8>,
     target_offset: u128,
 ) -> Result<ValidatePathResult, Error> {
-    // Split proof into branches and leaf. Leaf is the final proof and branches 
+    // Split proof into branches and leaf. Leaf is the final proof and branches
     // are ordered from root to leaf.
     let (branches, leaf) = path_buff.split_at(path_buff.len() - HASH_SIZE - NOTE_SIZE);
 
@@ -139,16 +139,13 @@ pub fn validate_path(
         }
 
         println!(
-            "{}",
-            format!(
-                "BranchProof: left: {}{}, right: {}{},offset: {} => path_hash: {}",
-                if is_right_of_offset { "" } else { "✅" },
-                base64_url::encode(&branch_proof.left_id),
-                if is_right_of_offset { "✅" } else { "" },
-                base64_url::encode(&branch_proof.right_id),
-                branch_proof.offset(),
-                base64_url::encode(&path_hash)
-            )
+            "BranchProof: left: {}{}, right: {}{},offset: {} => path_hash: {}",
+            if is_right_of_offset { "" } else { "✅" },
+            base64_url::encode(&branch_proof.left_id),
+            if is_right_of_offset { "✅" } else { "" },
+            base64_url::encode(&branch_proof.right_id),
+            branch_proof.offset(),
+            base64_url::encode(&path_hash)
         );
     }
     println!(
@@ -162,8 +159,8 @@ pub fn validate_path(
 
     Ok(ValidatePathResult {
         leaf_hash: leaf_proof.data_hash,
-        left_bound: left_bound,
-        right_bound: right_bound,
+        left_bound,
+        right_bound,
     })
 }
 
@@ -199,16 +196,13 @@ pub fn print_debug(proof: &Vec<u8>, target_offset: u128) -> Result<([u8; 32], u1
         }
 
         println!(
-            "{}",
-            format!(
-                "BranchProof: left: {}{}, right: {}{},offset: {} => path_hash: {}",
-                if is_right_of_offset { "" } else { "✅" },
-                base64_url::encode(&branch_proof.left_id),
-                if is_right_of_offset { "✅" } else { "" },
-                base64_url::encode(&branch_proof.right_id),
-                branch_proof.offset(),
-                base64_url::encode(&path_hash)
-            )
+            "BranchProof: left: {}{}, right: {}{},offset: {} => path_hash: {}",
+            if is_right_of_offset { "" } else { "✅" },
+            base64_url::encode(&branch_proof.left_id),
+            if is_right_of_offset { "✅" } else { "" },
+            base64_url::encode(&branch_proof.right_id),
+            branch_proof.offset(),
+            base64_url::encode(&path_hash)
         );
     }
     println!(

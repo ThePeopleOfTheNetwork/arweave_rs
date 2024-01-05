@@ -1,8 +1,9 @@
 use color_eyre::eyre::{eyre, Result};
-use std::fs::{File, OpenOptions};
-use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::fs::{File, OpenOptions, self};
+use std::io::{self, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::path::Path;
 
-use crate::helpers::{u256, DecodeHash};
+use crate::helpers::DecodeHash;
 
 use super::hash_index_scraper::{current_block_height_async, request_indexes, HashIndexJson};
 
@@ -79,10 +80,17 @@ impl HashIndex<Uninitialized> {
         // Get the current block height from the network
         let current_block_height: u64 = current_block_height_async().await;
 
+         // Ensure the path exists
+         let path = Path::new(FILE_PATH);
+
+         if let Some(dir) = path.parent() {
+             fs::create_dir_all(dir)?;
+         }
+
         // Try to load the hash index from disk
         match load_index_from_file() {
             Ok(indexes) => self.indexes = indexes,
-            Err(err) => println!("{err:?}"),
+            Err(err) => println!("Error encountered\n {:?}", err),
         }
 
         // Get the most recent blockheight from the index
@@ -180,7 +188,7 @@ impl HashIndex<Initialized> {
             }
         });
 
-        // It's the nature of binary_search_bh to return Err if it doesn't find 
+        // It's the nature of binary_search_bh to return Err if it doesn't find
         // an exact match. We are looking for the position of the closest element
         // so we ignore the Result enum values and extract the pos return val.
         let index = match result {

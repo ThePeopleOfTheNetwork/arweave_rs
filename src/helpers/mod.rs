@@ -1,3 +1,4 @@
+#![allow(clippy::assign_op_pattern)]
 use uint::construct_uint;
 
 // Definition of the U256 type

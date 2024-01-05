@@ -124,19 +124,19 @@ pub fn pre_validate_block(
     }
 
     // Prevalidate PoA - recall range (mining_hash = H0)
-    let (recall_byte_1, recall_byte_2) = match recall_bytes_is_valid(block_header, &mining_hash) {
+    let (recall_byte_1, _recall_byte_2) = match recall_bytes_is_valid(block_header, &mining_hash) {
         Ok(tuple) => tuple,
         Err(err) => return Err(err),
     };
 
     let num_items: usize = hash_index.num_indexes() as usize;
     let last_item: &HashIndexItem = hash_index.get_item(num_items - 1).unwrap();
-    println!("last: {}", last_item.weave_size);
+    //println!("last: {}", last_item.weave_size);
 
     // (ar_poa.erl) poa.chunk etc - merkle proofs
-    if !poa_is_valid(&block_header.poa, recall_byte_1, hash_index) {
-        return Err(eyre!("poa is invalid"));
-    }
+    // if !poa_is_valid(&block_header.poa, recall_byte_1, hash_index) {
+    //     return Err(eyre!("poa is invalid"));
+    // }
 
     // (ar_poa.erl) poa2.chunk  - merkle proofs
     // if !poa_is_valid(&block_header.poa2, recall_byte_2, hash_index) {
@@ -372,13 +372,12 @@ fn recall_bytes_is_valid(
         } else {
             Err(eyre!("invalid recall byte 2"))
         }
-    } else {
-        if recall_byte_1 == u256::from(block_header.recall_byte) {
+    } else if recall_byte_1 == u256::from(block_header.recall_byte) {
             Ok((recall_byte_1, recall_byte_2))
-        } else {
-            Err(eyre!("invalid recall byte 1"))
-        }
+    } else {
+        Err(eyre!("invalid recall byte 1"))
     }
+    
 }
 
 fn poa_is_valid(
@@ -419,7 +418,7 @@ fn poa_is_valid(
     };
 
     // Find the offset of the recall byte relative to a specific TX
-    let byte_offset_in_tx = byte_offset_in_block - tx_path_result.left_bound as u128;
+    let byte_offset_in_tx = byte_offset_in_block - tx_path_result.left_bound;
     let tx_start = 0;
     let tx_end = tx_path_result.right_bound - tx_path_result.left_bound;
     println!("tx_start: {tx_start} tx_end: {tx_end}");
@@ -442,10 +441,13 @@ fn poa_is_valid(
     };
 
     // TODO: Create packed entropy scratchpad for the chunk + reward_address
+    // randomx_long_with_entropy.cpp: 51
 
-    // TODO: Use a feistel cypher + entropy to decode the chunk
+    // TODO: Use a feistel cypher + entropy to decrypt the chunk
+    // randomx_long_with_entropy.cpp: 113
 
     // TODO: Hash the decoded chunk to see if it matches the data_path.leaf_hash
+    // ar_poa.erl:84  ar_tx:generate_chunk_id(Unpacked)
 
     true
 }
@@ -478,6 +480,9 @@ impl DoubleSigningProofBytes for DoubleSigningProof {
     }
 }
 
+/// The extend_raw_* functions do not prepend any kind of size bytes to the
+/// bytes they append. The other extend_<type> functions append bigEndian size
+/// bytes before appending the bytes of <type>.
 trait ExtendBytes {
     fn extend_raw_buf(&mut self, raw_size: usize, val: &[u8]) -> &mut Self;
     fn extend_optional_raw_buf(&mut self, raw_size: usize, val: &Option<Vec<u8>>) -> &mut Self;
@@ -497,6 +502,8 @@ trait ExtendBytes {
 }
 
 impl ExtendBytes for Vec<u8> {
+    /// Extends a Vec<u8> by [raw_size] amount of bytes by copying the last
+    /// [raw_size] bytes from [val] and appending them to the Vec<u8>
     fn extend_raw_buf(&mut self, raw_size: usize, val: &[u8]) -> &mut Self {
         let mut bytes = vec![0u8; raw_size];
 

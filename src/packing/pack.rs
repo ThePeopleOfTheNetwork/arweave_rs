@@ -16,9 +16,10 @@ pub fn pack_chunk(chunk_offset:u256, reward_address:&[u8;32], tx_root:&[u8;32]) 
         .calculate_entropy(&input, entropy_size, randomx_program_count)
         .unwrap();
 
-    for i in 0..10.min(entropy.len()) {
-        println!("{}", entropy[i]);
+    for byte in entropy.iter().take(10.min(entropy.len())) {
+        println!("{}", byte);
     }
+
 	entropy
 }
 
