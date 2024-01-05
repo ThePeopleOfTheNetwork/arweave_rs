@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![allow(unused_imports)]
 use arweave_rs::validator::block;
 use arweave_rs::validator::hash_index::Initialized;
 use eyre::Result;
@@ -41,6 +42,7 @@ struct TestContext {
     pub block2_case: (ArweaveBlockHeader, ArweaveBlockHeader),
     pub block3_case: (ArweaveBlockHeader, ArweaveBlockHeader),
     pub reset_case2: (ArweaveBlockHeader, ArweaveBlockHeader),
+    pub max_nonce_case: (ArweaveBlockHeader, ArweaveBlockHeader),
 }
 
 // Static test data for the tests, lazy loaded at runtime.
@@ -86,6 +88,9 @@ lazy_static! {
         let reset_case2 = parse_block_header_from_file("data/blocks/1325673.json");
         let reset_case2_prev = parse_block_header_from_file("data/blocks/1325672.json");
 
+        let max_nonce_case = parse_block_header_from_file("data/blocks/1337235.json");
+        let max_nonce_case_prev = parse_block_header_from_file("data/blocks/1337234.json");
+
         let tc:TestContext = TestContext {
             base_case: vec![base1, base2],
             reset_case: vec![reset1, reset2],
@@ -101,6 +106,7 @@ lazy_static! {
             block2_case: (block2_case, block2_case_prev),
             block3_case: (block3_case, block3_case_prev),
             reset_case2: (reset_case2, reset_case2_prev),
+            max_nonce_case: (max_nonce_case, max_nonce_case_prev),
         };
         tc
     };
@@ -305,7 +311,7 @@ fn test_randomx_hash_with_entropy() -> bool {
 }
 
 fn test_pre_validation() -> bool {
-    let (block_header, previous_block_header) = &TEST_DATA.reset_case2;
+    let (block_header, previous_block_header) = &TEST_DATA.max_nonce_case;
 
     let hash_index: HashIndex = HashIndex::new();
     let runtime = tokio::runtime::Runtime::new().unwrap();

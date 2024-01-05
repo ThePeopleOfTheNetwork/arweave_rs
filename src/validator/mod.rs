@@ -350,7 +350,7 @@ fn partition_number_is_valid(block_header: &ArweaveBlockHeader) -> bool {
 fn nonce_is_valid(block_header: &ArweaveBlockHeader) -> bool {
     let max = RECALL_RANGE_SIZE / DATA_CHUNK_SIZE - 1;
     let nonce_value = block_header.nonce as u32;
-    nonce_value < max
+    nonce_value <= max
 }
 
 fn recall_bytes_is_valid(
