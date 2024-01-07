@@ -8,12 +8,11 @@ pub fn compute_randomx_hash(key:&[u8], input:&[u8]) -> Vec<u8> {
     vm.calculate_hash(input).unwrap()
 }
 
-pub fn compute_randomx_hash_with_entropy(key:&[u8], input:&[u8]) -> ([u8;RANDOMX_HASH_SIZE],[u8; RANDOMX_ENTROPY_SIZE]) {
+pub fn compute_randomx_hash_with_entropy(key:&[u8], input:&[u8], randomx_program_count:usize) -> ([u8;RANDOMX_HASH_SIZE],[u8; RANDOMX_ENTROPY_SIZE]) {
     let flags = RandomXFlag::get_recommended_flags();
     let cache = RandomXCache::new(flags, key).unwrap();
     let vm = RandomXVM::new(flags, Some(cache), None).unwrap();
 
-    let randomx_program_count = 8;
     vm.calculate_hash_with_entropy(input, randomx_program_count).unwrap()
 }
 

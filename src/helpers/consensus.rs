@@ -39,10 +39,10 @@ pub static PARTITION_SIZE: u64 = 3600000000000;
 
 // The size of a recall range. The first range is randomly chosen from the given
 // mining partition. The second range is chosen from the entire weave.
-pub static RECALL_RANGE_SIZE: u32 = 100 * 1024 * 1024; // e.g. 104857600
+pub const RECALL_RANGE_SIZE: u32 = 100 * 1024 * 1024; // e.g. 104857600
 
 // Maximum size of a single data chunk, in bytes.
-pub static DATA_CHUNK_SIZE: u32 = 256 * 1024;
+pub const DATA_CHUNK_SIZE: u32 = 256 * 1024;
 
 // The original plan was to cap the proof at 262144 (also the maximum chunk size).
 // The maximum tree depth is then (262144 - 64) / (32 + 32 + 32) = 2730.
@@ -67,7 +67,7 @@ pub const MAX_TX_PATH_SIZE: usize = 2176;
 pub fn get_chunk_entropy_input(
     chunk_offset: u256,
     tx_root: &[u8; 32],
-    reward_address: &[u8; 32],
+    reward_addr: &[u8; 32],
 ) -> [u8; 32] {
     let mut chunk_offset_bytes: [u8; 32] = [0; 32];
     chunk_offset.to_big_endian(&mut chunk_offset_bytes);
@@ -75,7 +75,14 @@ pub fn get_chunk_entropy_input(
     let mut hasher = sha::Sha256::new();
     hasher.update(&chunk_offset_bytes);
     hasher.update(tx_root);
-    hasher.update(reward_address);
+    hasher.update(reward_addr);
+    hasher.finish()
+}
+
+/// Generate a chunk ID used to construct the Merkle tree from the tx data chunks.
+pub fn generate_chunk_id(chunk: &Vec<u8>) -> [u8;32] {
+    let mut hasher = sha::Sha256::new();
+    hasher.update(&chunk);
     hasher.finish()
 }
 

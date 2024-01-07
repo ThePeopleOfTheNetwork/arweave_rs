@@ -138,21 +138,21 @@ pub fn validate_path(
             left_bound = offset;
         }
 
-        println!(
-            "BranchProof: left: {}{}, right: {}{},offset: {} => path_hash: {}",
-            if is_right_of_offset { "" } else { "✅" },
-            base64_url::encode(&branch_proof.left_id),
-            if is_right_of_offset { "✅" } else { "" },
-            base64_url::encode(&branch_proof.right_id),
-            branch_proof.offset(),
-            base64_url::encode(&path_hash)
-        );
+        // println!(
+        //     "BranchProof: left: {}{}, right: {}{},offset: {} => path_hash: {}",
+        //     if is_right_of_offset { "" } else { "✅" },
+        //     base64_url::encode(&branch_proof.left_id),
+        //     if is_right_of_offset { "✅" } else { "" },
+        //     base64_url::encode(&branch_proof.right_id),
+        //     branch_proof.offset(),
+        //     base64_url::encode(&path_hash)
+        // );
     }
-    println!(
-        "  LeafProof: data_hash: {}, offset: {}",
-        base64_url::encode(&leaf_proof.data_hash),
-        usize::from_be_bytes(leaf_proof.offset)
-    );
+    // println!(
+    //     "  LeafProof: data_hash: {}, offset: {}",
+    //     base64_url::encode(&leaf_proof.data_hash),
+    //     usize::from_be_bytes(leaf_proof.offset)
+    // );
 
     // Proof nodes (including leaf nodes) always contain their right bound
     let right_bound = leaf_proof.offset() as u128;

@@ -169,7 +169,6 @@ impl HashIndex<Initialized> {
 
         let result = self.get_hash_index_item(recall_byte);
         if let Ok((index, found_item)) = result {
-            println!("{index} {}", found_item.weave_size);
             let previous_item = self.get_item(index - 1).unwrap();
             block_bounds.block_start_offset = previous_item.weave_size;
             block_bounds.block_end_offset = found_item.weave_size;
