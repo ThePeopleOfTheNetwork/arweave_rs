@@ -43,6 +43,7 @@ struct TestContext {
     pub block3_case: (ArweaveBlockHeader, ArweaveBlockHeader),
     pub reset_case2: (ArweaveBlockHeader, ArweaveBlockHeader),
     pub max_nonce_case: (ArweaveBlockHeader, ArweaveBlockHeader),
+    pub poa_failed_case:  (ArweaveBlockHeader, ArweaveBlockHeader),
 }
 
 // Static test data for the tests, lazy loaded at runtime.
@@ -91,6 +92,9 @@ lazy_static! {
         let max_nonce_case = parse_block_header_from_file("data/blocks/1337235.json");
         let max_nonce_case_prev = parse_block_header_from_file("data/blocks/1337234.json");
 
+        let poa_failed_case = parse_block_header_from_file("data/blocks/1338015.json");
+        let poa_failed_case_prev = parse_block_header_from_file("data/blocks/1338014.json");
+
         let tc:TestContext = TestContext {
             base_case: vec![base1, base2],
             reset_case: vec![reset1, reset2],
@@ -107,6 +111,7 @@ lazy_static! {
             block3_case: (block3_case, block3_case_prev),
             reset_case2: (reset_case2, reset_case2_prev),
             max_nonce_case: (max_nonce_case, max_nonce_case_prev),
+            poa_failed_case: (poa_failed_case, poa_failed_case_prev)
         };
         tc
     };
@@ -291,7 +296,7 @@ fn test_randomx_hash_with_entropy() -> bool {
     input.append(&mut nonce.to_vec());
     input.append(&mut segment.to_vec());
 
-    let (_hash, entropy) = compute_randomx_hash_with_entropy(&key, &input);
+    let (_hash, entropy) = compute_randomx_hash_with_entropy(&key, &input, 8);
 
     // Slice the first 32 bytes (256 bits)
     let first_256_bits = &entropy[0..32];
