@@ -84,6 +84,7 @@ impl Helpers<usize> for usize {
     }
 }
 
+#[derive(Debug)]
 pub struct ValidatePathResult {
     pub leaf_hash: [u8; HASH_SIZE],
     pub left_bound: u128,
@@ -124,7 +125,7 @@ pub fn validate_path(
         }
 
         let offset = branch_proof.offset() as u128;
-        let is_right_of_offset = target_offset > offset;
+        let is_right_of_offset = target_offset >= offset;
 
         // Choose the next expected_path_hash based on weather the target_offset
         // byte is to the left or right of the branch_proof's "offset" value
