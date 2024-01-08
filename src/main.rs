@@ -44,6 +44,7 @@ struct TestContext {
     pub reset_case2: (ArweaveBlockHeader, ArweaveBlockHeader),
     pub max_nonce_case: (ArweaveBlockHeader, ArweaveBlockHeader),
     pub poa_failed_case:  (ArweaveBlockHeader, ArweaveBlockHeader),
+    pub bad_tx_path_case:  (ArweaveBlockHeader, ArweaveBlockHeader),
 }
 
 // Static test data for the tests, lazy loaded at runtime.
@@ -95,6 +96,9 @@ lazy_static! {
         let poa_failed_case = parse_block_header_from_file("data/blocks/1338015.json");
         let poa_failed_case_prev = parse_block_header_from_file("data/blocks/1338014.json");
 
+        let bad_tx_path_case = parse_block_header_from_file("data/blocks/1338549.json");
+        let bad_tx_path_case_prev = parse_block_header_from_file("data/blocks/1338548.json");
+
         let tc:TestContext = TestContext {
             base_case: vec![base1, base2],
             reset_case: vec![reset1, reset2],
@@ -111,7 +115,8 @@ lazy_static! {
             block3_case: (block3_case, block3_case_prev),
             reset_case2: (reset_case2, reset_case2_prev),
             max_nonce_case: (max_nonce_case, max_nonce_case_prev),
-            poa_failed_case: (poa_failed_case, poa_failed_case_prev)
+            poa_failed_case: (poa_failed_case, poa_failed_case_prev),
+            bad_tx_path_case: (bad_tx_path_case, bad_tx_path_case_prev)
         };
         tc
     };
@@ -316,7 +321,7 @@ fn test_randomx_hash_with_entropy() -> bool {
 }
 
 fn test_pre_validation() -> bool {
-    let (block_header, previous_block_header) = &TEST_DATA.max_nonce_case;
+    let (block_header, previous_block_header) = &TEST_DATA.poa_failed_case;
 
     let hash_index: HashIndex = HashIndex::new();
     let runtime = tokio::runtime::Runtime::new().unwrap();
