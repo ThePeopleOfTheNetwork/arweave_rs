@@ -1,6 +1,6 @@
 use color_eyre::eyre::{eyre, Result};
 use std::fs::{File, OpenOptions, self};
-use std::io::{self, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 use crate::helpers::DecodeHash;

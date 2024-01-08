@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-use futures::executor::block_on;
 use openssl::sha;
 
 use crate::{helpers::u256, json_types::ArweaveBlockHeader, validator::hash_index::BlockBounds};

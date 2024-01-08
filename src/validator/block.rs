@@ -1,4 +1,4 @@
-use crate::{helpers::{consensus::*, u256}};
+use crate::helpers::{consensus::*, u256};
 use arweave_randomx_rs::*;
 
 pub fn compute_randomx_hash(key: &[u8], input: &[u8]) -> Vec<u8> {
