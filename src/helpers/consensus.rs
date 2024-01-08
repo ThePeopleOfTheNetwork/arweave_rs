@@ -1,7 +1,8 @@
 #![allow(dead_code)]
+use futures::executor::block_on;
 use openssl::sha;
 
-use crate::{helpers::u256, json_types::ArweaveBlockHeader};
+use crate::{helpers::u256, json_types::ArweaveBlockHeader, validator::hash_index::BlockBounds};
 
 //The key to initialize the RandomX state from, for RandomX packing.
 pub const RANDOMX_PACKING_KEY: &[u8] = b"default arweave 2.5 pack key";
@@ -24,6 +25,10 @@ pub const RETARGET_TOLERANCE_LOWER_BOUND: u64 = (TARGET_TIME * RETARGET_BLOCKS) 
 
 pub const JOIN_CLOCK_TOLERANCE: u64 = 15;
 pub const CLOCK_DRIFT_MAX: u64 = 5;
+
+// The threshold was determined on the mainnet at the 2.5 fork block. The chunks
+// submitted after the threshold must adhere to stricter validation rules.
+pub const STRICT_DATA_SPLIT_THRESHOLD: u128 = 30607159107830;
 
 // Reset the nonce limiter (vdf) once every 1200 steps/seconds or every ~20 min
 pub const NONCE_LIMITER_RESET_FREQUENCY: usize = 10 * 120;
@@ -56,14 +61,14 @@ pub const MAX_DATA_PATH_SIZE: usize = 349504;
 // extend it somewhat for better future-compatibility.
 pub const MAX_TX_PATH_SIZE: usize = 2176;
 
-// The presence of the absolute end offset in the key makes sure packing of
-// every chunk is unique, even when the same chunk is present in the same
-// transaction or across multiple transactions or blocks. The presence of the
-// transaction root in the key ensures one cannot find data that has certain
-// patterns after packing. The presence of the reward address, combined with the
-// 2.6 mining mechanics, puts a relatively low cap on the performance of a
-// single dataset replica, essentially incentivizing miners to create more weave
-// replicas per invested dollar.
+/// The presence of the absolute end offset in the key makes sure packing of
+/// every chunk is unique, even when the same chunk is present in the same
+/// transaction or across multiple transactions or blocks. The presence of the
+/// transaction root in the key ensures one cannot find data that has certain
+/// patterns after packing. The presence of the reward address, combined with the
+/// 2.6 mining mechanics, puts a relatively low cap on the performance of a
+/// single dataset replica, essentially incentivizing miners to create more weave
+/// replicas per invested dollar.
 pub fn get_chunk_entropy_input(
     chunk_offset: u256,
     tx_root: &[u8; 32],
@@ -79,8 +84,23 @@ pub fn get_chunk_entropy_input(
     hasher.finish()
 }
 
+/// Return the smallest multiple of 256 KiB counting from StrictDataSplitThreshold
+/// bigger than or equal to Offset.
+pub fn get_byte_offset(offset: u256, block_bounds: &BlockBounds) -> u128 {
+    if block_bounds.block_end_offset >= STRICT_DATA_SPLIT_THRESHOLD {
+        let new_offset = offset.as_u128() + 1;
+        let diff = new_offset - STRICT_DATA_SPLIT_THRESHOLD;
+        STRICT_DATA_SPLIT_THRESHOLD
+            + ((diff - 1) / DATA_CHUNK_SIZE as u128 + 1) * DATA_CHUNK_SIZE as u128
+            - DATA_CHUNK_SIZE as u128
+            - block_bounds.block_start_offset
+    } else {
+        offset.as_u128() - block_bounds.block_start_offset
+    }
+}
+
 /// Generate a chunk ID used to construct the Merkle tree from the tx data chunks.
-pub fn generate_chunk_id(chunk: &Vec<u8>) -> [u8;32] {
+pub fn generate_chunk_id(chunk: &[u8]) -> [u8; 32] {
     let mut hasher = sha::Sha256::new();
     hasher.update(&chunk);
     hasher.finish()
@@ -141,7 +161,11 @@ pub fn get_seed_data(step_number: u64, previous_block: &ArweaveBlockHeader) -> S
 
 /// (ar_block.erl) Return {RecallRange1Start, RecallRange2Start} - the start offsets
 /// of the two recall ranges.
- pub fn get_recall_range(h0: &[u8;32], partition_number: u64, partition_upper_bound: u64) -> (u256, u256) {
+pub fn get_recall_range(
+    h0: &[u8; 32],
+    partition_number: u64,
+    partition_upper_bound: u64,
+) -> (u256, u256) {
     // Decode the first 8 bytes of H0 to an unsigned integer (big-endian)
     let recall_range1_offset =
         u64::from_be_bytes(h0.get(0..8).unwrap_or(&[0; 8]).try_into().unwrap());
@@ -151,7 +175,7 @@ pub fn get_seed_data(step_number: u64, previous_block: &ArweaveBlockHeader) -> S
         + recall_range1_offset % std::cmp::min(PARTITION_SIZE, partition_upper_bound);
 
     // Decode the entire H0 to an unsigned integer (big-endian)
-	let recall_range2_start = u256::from_big_endian(h0) % u256::from(partition_upper_bound);
+    let recall_range2_start = u256::from_big_endian(h0) % u256::from(partition_upper_bound);
 
     (u256::from(recall_range1_start), recall_range2_start)
 }
