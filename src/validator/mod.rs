@@ -6,7 +6,8 @@ use self::{
 use crate::{
     helpers::{consensus::*, u256},
     json_types::{ArweaveBlockHeader, DoubleSigningProof, PoaData},
-    validator::{hash_index::HashIndexItem, merkle::validate_path}, packing::feistel::feistel_decrypt,
+    packing::feistel::feistel_decrypt,
+    validator::merkle::validate_path,
 };
 use color_eyre::eyre::{eyre, Result};
 use openssl::sha;
@@ -130,13 +131,23 @@ pub fn pre_validate_block(
     };
 
     // (ar_poa.erl) poa.chunk etc - merkle proofs
-    if !poa_is_valid(&block_header.poa, recall_byte_1, hash_index, &block_header.reward_addr) {
+    if !poa_is_valid(
+        &block_header.poa,
+        recall_byte_1,
+        hash_index,
+        &block_header.reward_addr,
+    ) {
         return Err(eyre!("poa is invalid"));
     }
 
     // (ar_poa.erl) poa2.chunk  - merkle proofs
     if let Some(recall_byte_2) = recall_byte_2 {
-        if !poa_is_valid(&block_header.poa2, recall_byte_2, hash_index,&block_header.reward_addr) {
+        if !poa_is_valid(
+            &block_header.poa2,
+            recall_byte_2,
+            hash_index,
+            &block_header.reward_addr,
+        ) {
             return Err(eyre!("poa2 is invalid"));
         }
     }
@@ -392,42 +403,49 @@ fn poa_is_valid(
     // chunk offsets of the block
     if (start..=end).contains(&recall_byte.as_u128()) {
         // println!(
-        //     "recall_byte falls within block_bounds {}..{}",
-        //     block_bounds.block_start_offset, block_bounds.block_end_offset
+        //     "recall_byte falls within block_bounds {}..{} of block_height: {}",
+        //     block_bounds.block_start_offset, block_bounds.block_end_offset, block_bounds.height
         // );
     } else {
         return false;
     }
 
     //let block_size = block_bounds.block_end_offset - block_bounds.block_start_offset;
-    let byte_offset_in_block = (recall_byte - block_bounds.block_start_offset).as_u128();
+    let byte_offset_in_block = get_byte_offset(recall_byte, &block_bounds);
     // println!(
     //     "tx_root: {:?} target_offset_in_block: {byte_offset_in_block}",
     //     base64_url::encode(&block_bounds.tx_root)
     // );
 
+    // TX_PATH Validation
+    // --------------------------------------------------------------
     let tx_path_result = match validate_path(
         block_bounds.tx_root,
         &poa_data.tx_path,
         byte_offset_in_block,
     ) {
         Ok(result) => result,
-        Err(_) => return false,
+        Err(_) => {
+            println!("tx_path is invalid");
+            return false;
+        }
     };
 
     // Find the offset of the recall byte relative to a specific TX
     let byte_offset_in_tx = byte_offset_in_block - tx_path_result.left_bound;
     let tx_start = 0;
     let tx_end = tx_path_result.right_bound - tx_path_result.left_bound;
-    //println!("tx_start: {tx_start} tx_end: {tx_end}");
+    // println!("tx_start: {tx_start} tx_end: {tx_end} byte offset: {byte_offset_in_tx}");
 
     // Test to see if the byte falls within the bounds of the tx
-    if (tx_start..=tx_end).contains(&byte_offset_in_tx) {
+    if (tx_start..=tx_end).contains(&byte_offset_in_tx) || (tx_start == 0 && tx_end == 0) {
         // println!("recall_byte falls within tx_bounds {tx_start}..={tx_end}");
     } else {
         return false;
     }
 
+    // DATA_PATH Validation
+    // --------------------------------------------------------------
     // The leaf proof in the tx_path is the root of the data_path
     let data_path_result = match validate_path(
         tx_path_result.leaf_hash,
@@ -439,8 +457,12 @@ fn poa_is_valid(
     };
 
     // Get the chunk (end ) offset
-    let chunk_size = data_path_result.right_bound - data_path_result.left_bound;
-	let chunk_offset = block_bounds.block_start_offset + tx_path_result.left_bound + data_path_result.right_bound;
+    let chunk_size = (data_path_result.right_bound - data_path_result.left_bound) as usize;
+    let chunk_offset =
+        block_bounds.block_start_offset + tx_path_result.left_bound + data_path_result.right_bound;
+
+    // println!("leaf_hash: {}, left_bound: {}, right_bound: {}", base64_url::encode(&data_path_result.leaf_hash), data_path_result.left_bound, data_path_result.right_bound);
+    // println!("DATA_PATH is valid chunk_size: {chunk_size} target_byte: {byte_offset_in_tx}");
 
     // Create packed entropy scratchpad for the chunk + reward_address
     // randomx_long_with_entropy.cpp: 51
@@ -451,11 +473,13 @@ fn poa_is_valid(
 
     // TODO: Use a feistel cypher + entropy to decrypt the chunk
     // randomx_long_with_entropy.cpp: 113
-    let decrypted_chunk = feistel_decrypt(&poa_data.chunk, &entropy.1 );
+    let decrypted_chunk = feistel_decrypt(&poa_data.chunk, &entropy.1);
+    let (decrypted_chunk, _) = decrypted_chunk.split_at(chunk_size.min(decrypted_chunk.len()));
+
 
     // Hash the decoded chunk to see if it matches the data_path.leaf_hash
     // ar_poa.erl:84  ar_tx:generate_chunk_id(Unpacked)
-    let chunk_hash = generate_chunk_id(&decrypted_chunk);
+    let chunk_hash = generate_chunk_id(decrypted_chunk);
 
     // Check if the decrypted chunk_hash matches the one in the data_path
     chunk_hash == data_path_result.leaf_hash
