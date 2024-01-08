@@ -9,6 +9,7 @@ use crate::{
     packing::feistel::feistel_decrypt,
     validator::merkle::validate_path,
 };
+use arweave_randomx_rs::RandomXVM;
 use color_eyre::eyre::{eyre, Result};
 use openssl::sha;
 
@@ -21,6 +22,7 @@ pub fn pre_validate_block(
     block_header: &ArweaveBlockHeader,
     previous_block_header: &ArweaveBlockHeader,
     hash_index: &HashIndex<Initialized>,
+    randomx_vm: Option<&RandomXVM>
 ) -> Result<[u8; 32]> {
     // =========================================================================
     // Arweave 2.7 checks
@@ -72,7 +74,7 @@ pub fn pre_validate_block(
     // ==============================
     // Recently proposed block checks
     // ------------------------------
-    // Validate timestamp å
+    // Validate timestamp
 
     // Validate existing Solution hash - has the solution  already been
     // validated? (possibly report a double signing)
@@ -136,6 +138,7 @@ pub fn pre_validate_block(
         recall_byte_1,
         hash_index,
         &block_header.reward_addr,
+        randomx_vm
     ) {
         return Err(eyre!("poa is invalid"));
     }
@@ -147,6 +150,7 @@ pub fn pre_validate_block(
             recall_byte_2,
             hash_index,
             &block_header.reward_addr,
+            randomx_vm
         ) {
             return Err(eyre!("poa2 is invalid"));
         }
@@ -393,6 +397,7 @@ fn poa_is_valid(
     recall_byte: u256,
     hash_index: &HashIndex<Initialized>,
     reward_addr: &[u8; 32],
+    randomx_vm: Option<&RandomXVM>
 ) -> bool {
     // Use the hash_index to look up the BlockStart, BlockEnd, and tx_root
     let block_bounds = hash_index.get_block_bounds(recall_byte.as_u128());
@@ -456,7 +461,7 @@ fn poa_is_valid(
         Err(_) => return false,
     };
 
-    // Get the chunk (end ) offset
+    // Get the chunk (end) offset
     let chunk_size = (data_path_result.right_bound - data_path_result.left_bound) as usize;
     let chunk_offset =
         block_bounds.block_start_offset + tx_path_result.left_bound + data_path_result.right_bound;
@@ -467,15 +472,16 @@ fn poa_is_valid(
     // Create packed entropy scratchpad for the chunk + reward_address
     // randomx_long_with_entropy.cpp: 51
     let input = get_chunk_entropy_input(chunk_offset.into(), &block_bounds.tx_root, reward_addr);
-    let key = &RANDOMX_PACKING_KEY;
     let randomx_program_count = RANDOMX_PACKING_ROUNDS_2_6;
-    let entropy = compute_randomx_hash_with_entropy(&key, &input, randomx_program_count);
+    let entropy = compute_randomx_hash_with_entropy(&input, randomx_program_count, randomx_vm);
 
-    // TODO: Use a feistel cypher + entropy to decrypt the chunk
+    // Use a feistel cypher + entropy to decrypt the chunk
     // randomx_long_with_entropy.cpp: 113
     let decrypted_chunk = feistel_decrypt(&poa_data.chunk, &entropy.1);
-    let (decrypted_chunk, _) = decrypted_chunk.split_at(chunk_size.min(decrypted_chunk.len()));
 
+    // Because all chunks are packed as DATA_CHUNK_SIZE, if the proof chunk is 
+    // smaller we need to trim off the excess padding introduced by packing 
+    let (decrypted_chunk, _) = decrypted_chunk.split_at(chunk_size.min(decrypted_chunk.len()));
 
     // Hash the decoded chunk to see if it matches the data_path.leaf_hash
     // ar_poa.erl:84  ar_tx:generate_chunk_id(Unpacked)

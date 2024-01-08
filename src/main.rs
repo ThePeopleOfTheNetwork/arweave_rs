@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
+use arweave_randomx_rs::{create_randomx_vm, RandomXMode};
 use arweave_rs::validator::block;
 use arweave_rs::validator::hash_index::Initialized;
 use eyre::Result;
@@ -292,7 +293,7 @@ fn test_randomx_hash_with_entropy() -> bool {
     // ExpectedEntropy = read_entropy_fixture(),
     // ?assertEqual(ExpectedEntropy, OutEntropy).
 
-    let key: [u8; 32] = DecodeHash::from(ENCODED_KEY).unwrap();
+    let packing_key: [u8; 32] = DecodeHash::from(ENCODED_KEY).unwrap();
     let nonce: [u8; 32] = DecodeHash::from(ENCODED_NONCE).unwrap();
     let segment: [u8; 48] = DecodeHash::from(ENCODED_SEGMENT).unwrap();
     let _expected_hash: [u8; 32] = DecodeHash::from(ENCODED_HASH).unwrap();
@@ -301,7 +302,11 @@ fn test_randomx_hash_with_entropy() -> bool {
     input.append(&mut nonce.to_vec());
     input.append(&mut segment.to_vec());
 
-    let (_hash, entropy) = compute_randomx_hash_with_entropy(&key, &input, 8);
+    let randomx_vm = create_randomx_vm(RandomXMode::FastHashing, &packing_key);
+
+    let randomx_program_count = 8;
+
+    let (_hash, entropy) = compute_randomx_hash_with_entropy(&input, randomx_program_count, Some(&randomx_vm));
 
     // Slice the first 32 bytes (256 bits)
     let first_256_bits = &entropy[0..32];
@@ -327,7 +332,7 @@ fn test_pre_validation() -> bool {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let hash_index = runtime.block_on(hash_index.init()).unwrap();
     
-    let solution_hash = pre_validate_block(block_header, previous_block_header, &hash_index).unwrap();
+    let solution_hash = pre_validate_block(block_header, previous_block_header, &hash_index, None).unwrap();
 
     let solution_hash_value_big: u256 = u256::from_big_endian(&solution_hash);
 

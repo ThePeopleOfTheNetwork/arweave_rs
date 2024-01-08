@@ -1,19 +1,39 @@
-use crate::helpers::{consensus::*, u256};
+use crate::{helpers::{consensus::*, u256}};
 use arweave_randomx_rs::*;
 
-pub fn compute_randomx_hash(key:&[u8], input:&[u8]) -> Vec<u8> {
+pub fn compute_randomx_hash(key: &[u8], input: &[u8]) -> Vec<u8> {
     let flags = RandomXFlag::get_recommended_flags();
     let cache = RandomXCache::new(flags, key).unwrap();
     let vm = RandomXVM::new(flags, Some(cache), None).unwrap();
     vm.calculate_hash(input).unwrap()
 }
 
-pub fn compute_randomx_hash_with_entropy(key:&[u8], input:&[u8], randomx_program_count:usize) -> ([u8;RANDOMX_HASH_SIZE],[u8; RANDOMX_ENTROPY_SIZE]) {
-    let flags = RandomXFlag::get_recommended_flags();
-    let cache = RandomXCache::new(flags, key).unwrap();
-    let vm = RandomXVM::new(flags, Some(cache), None).unwrap();
+/// If you would like to override the packing key, initialize a new randomx_vm
+/// with that key and pass it to the function.
+pub fn compute_randomx_hash_with_entropy(
+    input: &[u8],
+    randomx_program_count: usize,
+    randomx_vm: Option<&RandomXVM>,
+) -> ([u8; RANDOMX_HASH_SIZE], [u8; RANDOMX_ENTROPY_SIZE]) {
+    // These variables extend the life of the created RandomX instance outside 
+    // the scope of the [None] match arm below
+    let vm: &RandomXVM;
+    let vm_storage: Option<RandomXVM>;
 
-    vm.calculate_hash_with_entropy(input, randomx_program_count).unwrap()
+    // If needed, lazy initialize a RandomXVM and borrow a reference to it
+    match randomx_vm {
+        Some(existing_vm) => {
+            vm = existing_vm;
+        }
+        None => {
+            // Creates a disposable RandomXVM instance for use in this function
+            vm_storage = Some(create_randomx_vm(RandomXMode::FastHashing, RANDOMX_PACKING_KEY));
+            vm = vm_storage.as_ref().unwrap();
+        }
+    };
+
+    vm.calculate_hash_with_entropy(input, randomx_program_count)
+        .unwrap()
 }
 
 /// The reference erlang implementation refers to this as ar_block:compute_h0
@@ -22,7 +42,7 @@ pub fn compute_mining_hash(
     partition_number: u32,
     vdf_seed: [u8; 48],
     mining_address: [u8; 32],
-) -> [u8;32] {
+) -> [u8; 32] {
     // TODO: Access the RandomX Cache from some global location
     let key = RANDOMX_PACKING_KEY;
 
@@ -44,10 +64,10 @@ pub fn compute_mining_hash(
 
     input.append(&mut vdf_output.to_vec());
 
-    let pn:u256 = u256::from(partition_number);
+    let pn: u256 = u256::from(partition_number);
     let mut partition_bytes: [u8; 32] = [0u8; 32];
     pn.to_big_endian(&mut partition_bytes);
-    
+
     input.append(&mut partition_bytes.try_into().unwrap());
 
     input.append(&mut vdf_seed[..32].to_vec()); // Use first 32 bytes of vdf_seed
@@ -58,8 +78,7 @@ pub fn compute_mining_hash(
 
     let mining_hash = vm.calculate_hash(&input).unwrap();
 
-    let hash_array: [u8; 32] = mining_hash
-    .try_into().unwrap();
+    let hash_array: [u8; 32] = mining_hash.try_into().unwrap();
     hash_array
 }
 
