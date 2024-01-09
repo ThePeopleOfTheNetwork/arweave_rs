@@ -6,19 +6,19 @@ use crate::helpers::{DecodeHash, u256};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ArweaveBlockHeader {
-    #[serde(deserialize_with = "parse_string_to_u256")]
+    #[serde(deserialize_with = "string_to_u256")]
     pub merkle_rebase_support_threshold:u256,
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    #[serde(deserialize_with = "decode_to_bytes")]
     pub chunk_hash: [u8; 32],
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    #[serde(deserialize_with = "decode_to_bytes")]
     pub block_time_history_hash: [u8;32],
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    #[serde(deserialize_with = "decode_to_bytes")]
     pub hash_preimage: [u8; 32],
-    #[serde(deserialize_with = "parse_string_to_u64")]
+    #[serde(deserialize_with = "string_to_u64")]
     pub recall_byte: u64,
-    #[serde(deserialize_with = "parse_string_to_u64")]
+    #[serde(deserialize_with = "string_to_u64")]
     pub reward: u64,
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    #[serde(deserialize_with = "decode_to_bytes")]
     pub previous_solution_hash: [u8; 32],
     pub partition_number: u64,
     pub nonce_limiter_info: NonceLimiterInfo,
@@ -27,58 +27,58 @@ pub struct ArweaveBlockHeader {
     pub signature: Vec<u8>,
     #[serde(deserialize_with = "base64_string_to_bytes")]
     pub reward_key: Vec<u8>,
-    #[serde(deserialize_with = "parse_string_to_u256")]
+    #[serde(deserialize_with = "string_to_u256")]
     pub price_per_gib_minute: u256,
-    #[serde(deserialize_with = "parse_string_to_u256")]
+    #[serde(deserialize_with = "string_to_u256")]
     pub scheduled_price_per_gib_minute: u256,
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    #[serde(deserialize_with = "decode_to_bytes")]
     pub reward_history_hash: [u8; 32],
-    #[serde(deserialize_with = "parse_string_to_u256")]
+    #[serde(deserialize_with = "string_to_u256")]
     pub debt_supply: u256,
-    #[serde(deserialize_with = "parse_string_to_u256")]
+    #[serde(deserialize_with = "string_to_u256")]
     pub kryder_plus_rate_multiplier: u256,
-    #[serde(deserialize_with = "parse_string_to_u256")]
+    #[serde(deserialize_with = "string_to_u256")]
     pub kryder_plus_rate_multiplier_latch: u256,
-    #[serde(deserialize_with = "parse_string_to_u256")]
+    #[serde(deserialize_with = "string_to_u256")]
     pub denomination: u256,
     pub redenomination_height: u64,
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    #[serde(deserialize_with = "decode_to_bytes")]
     pub previous_block: [u8; 48],
     pub timestamp: u64,
     pub last_retarget: u64,
-    #[serde(default, deserialize_with = "optional_parse_string_to_u256")]
+    #[serde(default, deserialize_with = "optional_string_to_u256")]
     pub recall_byte2: Option<u256>,
-    #[serde(default, deserialize_with = "decode_hash_to_bytes")]
+    #[serde(default, deserialize_with = "decode_to_bytes")]
     pub chunk2_hash: Option<[u8; 32]>,
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    #[serde(deserialize_with = "decode_to_bytes")]
     pub hash: [u8; 32],
-    #[serde(deserialize_with = "parse_string_to_u256")]
+    #[serde(deserialize_with = "string_to_u256")]
     pub diff: u256,
     pub height: u64,
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    #[serde(deserialize_with = "decode_to_bytes")]
     pub indep_hash: [u8; 48],
-    #[serde(deserialize_with = "parse_array_of_base64_to_bytes")]
+    #[serde(deserialize_with = "array_of_base64_to_bytes")]
     pub txs: Vec<Vec<u8>>,
     #[serde(deserialize_with = "decode_nonce_u64")]
     pub nonce: u64,
-    #[serde(default, deserialize_with = "decode_hash_to_bytes")]
+    #[serde(default, deserialize_with = "decode_to_bytes")]
     pub tx_root: Option<[u8; 32]>,
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    #[serde(deserialize_with = "decode_to_bytes")]
     pub wallet_list: [u8; 48],
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    #[serde(deserialize_with = "decode_to_bytes")]
     pub reward_addr: [u8; 32],
-    #[serde(deserialize_with = "parse_array_of_base64_to_bytes")]
+    #[serde(deserialize_with = "array_of_base64_to_bytes")]
     pub tags: Vec<Vec<u8>>,
-    #[serde(deserialize_with = "parse_string_to_u64")]
+    #[serde(deserialize_with = "string_to_u64")]
     pub reward_pool: u64,
-    #[serde(deserialize_with = "parse_string_to_u64")]
+    #[serde(deserialize_with = "string_to_u64")]
     pub weave_size: u64,
-    #[serde(deserialize_with = "parse_string_to_u64")]
+    #[serde(deserialize_with = "string_to_u64")]
     pub block_size: u64,
-    #[serde(default, deserialize_with = "parse_string_to_u256")]
+    #[serde(default, deserialize_with = "string_to_u256")]
     pub cumulative_diff: u256,
     pub double_signing_proof: DoubleSigningProof,
-    #[serde(deserialize_with = "parse_string_to_u256")]
+    #[serde(deserialize_with = "string_to_u256")]
     pub previous_cumulative_diff: u256,
     #[serde(deserialize_with = "parse_usd_to_ar_rate")]
     pub usd_to_ar_rate: [u64; 2],
@@ -86,11 +86,11 @@ pub struct ArweaveBlockHeader {
     pub scheduled_usd_to_ar_rate: [u64; 2],
    
    
-    #[serde(deserialize_with = "parse_string_to_u64")]
+    #[serde(deserialize_with = "string_to_u64")]
     pub packing_2_5_threshold: u64,
-    #[serde(deserialize_with = "parse_string_to_u64")]
+    #[serde(deserialize_with = "string_to_u64")]
     pub strict_data_split_threshold: u64,
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    #[serde(deserialize_with = "decode_to_bytes")]
     pub hash_list_merkle: [u8; 48],
     pub poa: PoaData,
    
@@ -167,35 +167,35 @@ pub struct DoubleSigningProof {
     pub pub_key: Option<Vec<u8>>,
      #[serde(default, deserialize_with = "optional_base64_string_to_bytes")]
     pub sig1: Option<Vec<u8>>,
-    #[serde(default, deserialize_with = "optional_parse_string_to_u256")]
+    #[serde(default, deserialize_with = "optional_string_to_u256")]
     pub cdiff1: Option<u256>,
-    #[serde(default, deserialize_with = "optional_parse_string_to_u256")]
+    #[serde(default, deserialize_with = "optional_string_to_u256")]
     pub prev_cdiff1:Option<u256>,
-    #[serde(default, deserialize_with = "optional_decode_hash_to_bytes")]
+    #[serde(default, deserialize_with = "optional_decode_to_bytes")]
     pub preimage1: Option<[u8;32]>,
      #[serde(default, deserialize_with = "optional_base64_string_to_bytes")]
     pub sig2: Option<Vec<u8>>,
-    #[serde(default, deserialize_with = "optional_parse_string_to_u256")]
+    #[serde(default, deserialize_with = "optional_string_to_u256")]
     pub cdiff2:Option<u256>,
-    #[serde(default, deserialize_with = "optional_parse_string_to_u256")]
+    #[serde(default, deserialize_with = "optional_string_to_u256")]
     pub prev_cdiff2:Option<u256>,
-    #[serde(default, deserialize_with = "optional_decode_hash_to_bytes")]
+    #[serde(default, deserialize_with = "optional_decode_to_bytes")]
     pub preimage2: Option<[u8;32]>
 }
 
 /// NonceLImiterInput holds the nonce_limiter_info from the Arweave block header
 #[derive(Clone, Debug, Deserialize)]
 pub struct NonceLimiterInfo {
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    #[serde(deserialize_with = "decode_to_bytes")]
     pub output: [u8; 32],
     pub global_step_number: u64,
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    #[serde(deserialize_with = "decode_to_bytes")]
     pub seed: [u8; 48],
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    #[serde(deserialize_with = "decode_to_bytes")]
     pub next_seed: [u8; 48],
     pub zone_upper_bound: u64,
     pub next_zone_upper_bound: u64,
-    #[serde(deserialize_with = "decode_hash_to_bytes")]
+    #[serde(deserialize_with = "decode_to_bytes")]
     pub prev_output: [u8; 32],
     #[serde(deserialize_with = "parse_array_of_hashes_to_bytes")]
     pub last_step_checkpoints: Vec<[u8; 32]>,
@@ -240,7 +240,7 @@ where
 }
 
 /// serde helper method to convert a JSON `string` value to a `u64`
-fn parse_string_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
+fn string_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -248,7 +248,7 @@ where
     s.parse::<u64>().map_err(serde::de::Error::custom)
 }
 
-fn parse_string_to_u256<'de, D>(deserializer: D) -> Result<u256, D::Error>
+fn string_to_u256<'de, D>(deserializer: D) -> Result<u256, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -256,7 +256,7 @@ where
     u256::from_dec_str(&s).map_err(serde::de::Error::custom)
 }
 
-pub fn decode_hash_to_bytes<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+pub fn decode_to_bytes<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: Deserializer<'de>,
     T: DecodeHash,
@@ -270,7 +270,7 @@ where
     }
 }
 
-pub fn optional_decode_hash_to_bytes<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+pub fn optional_decode_to_bytes<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     D: Deserializer<'de>,
     T: DecodeHash,
@@ -303,7 +303,7 @@ where
     }
 }
 
-fn optional_parse_string_to_u256<'de, D>(deserializer: D) -> Result<Option<u256>, D::Error>
+fn optional_string_to_u256<'de, D>(deserializer: D) -> Result<Option<u256>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -383,7 +383,7 @@ where
     deserializer.deserialize_seq(Base64VecVisitor)
 }
 
-fn parse_array_of_base64_to_bytes<'de, D>(deserializer: D) -> Result<Vec<Vec<u8>>, D::Error>
+fn array_of_base64_to_bytes<'de, D>(deserializer: D) -> Result<Vec<Vec<u8>>, D::Error>
 where
     D: Deserializer<'de>,
 {

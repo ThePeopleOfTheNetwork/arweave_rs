@@ -1,19 +1,17 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
-use arweave_randomx_rs::{create_randomx_vm, RandomXMode};
-use arweave_rs::validator::block;
+use arweave_randomx_rs::*;
 use arweave_rs::validator::hash_index::Initialized;
 use eyre::Result;
 use helpers::{DecodeHash, u256};
 use json_types::{ArweaveBlockHeader, NonceLimiterInfo};
 use lazy_static::lazy_static;
 use openssl::hash;
-use packing::pack::pack_chunk;
+use packing::pack::{pack_chunk, compute_randomx_hash_with_entropy};
 use paris::Logger;
 use std::fs::File;
 use std::io::Read;
 use std::time::Instant;
-use validator::block::{compute_randomx_hash, compute_randomx_hash_with_entropy};
 use validator::hash_index::HashIndex;
 use validator::hash_index_scraper::request_hash_index_jsons;
 use validator::{compute_solution_hash, pre_validate_block};
@@ -230,7 +228,7 @@ fn main() -> Result<()> {
     //     &mut logger,
     // );
 
-    // run_test(test_pack_chunk, "test_pack_chunk", &mut logger);
+    //run_test(test_pack_chunk, "test_pack_chunk", &mut logger);
     // run_test(test_validator_init, "test_validator_init", &mut logger);
     // run_test(test_validator_index_jsons, "test_validator_index_jsons", &mut logger);
     run_test(test_pre_validation, "test_pre_validation", &mut logger);
@@ -250,6 +248,15 @@ const ENCODED_HASH: &str = "QQYWA46qnFENL4OTQdGU8bWBj5OKZ2OOPyynY3izung";
 const ENCODED_NONCE: &str = "f_z7RLug8etm3SrmRf-xPwXEL0ZQ_xHng2A5emRDQBw";
 const ENCODED_SEGMENT: &str =
     "7XM3fgTCAY2GFpDjPZxlw4yw5cv8jNzZSZawywZGQ6_Ca-JDy2nX_MC2vjrIoDGp";
+
+
+pub fn compute_randomx_hash(key: &[u8], input: &[u8]) -> Vec<u8> {
+    let flags = RandomXFlag::get_recommended_flags();
+    let cache = RandomXCache::new(flags, key).unwrap();
+    let vm = RandomXVM::new(flags, Some(cache), None).unwrap();
+    vm.calculate_hash(input).unwrap()
+}
+    
 
 fn test_randomx_hash() -> bool {
     let key: [u8; 32] = DecodeHash::from(ENCODED_KEY).unwrap();
@@ -370,12 +377,11 @@ fn test_validator_index_jsons() -> bool {
 }
 
 fn test_pack_chunk() -> bool {
-    // let block_header = &TEST_DATA.packing_case;
-    // let reward_address: [u8; 32] = block_header.reward_addr;
-    // let tx_root: [u8; 32] = block_header.tx_root;
-    // let chunk = pack_chunk(U256::from(0), &reward_address, &tx_root);
-    // chunk.len() > 0
-    false
+    let (block_header, _) = &TEST_DATA.packing_case;
+    let reward_address: [u8; 32] = block_header.reward_addr;
+    let tx_root: [u8; 32] = block_header.tx_root.unwrap();
+    let chunk = pack_chunk(u256::from(0), &reward_address, &tx_root);
+    chunk.len() > 0
 }
 
 fn test_last_step_checkpoints_base() -> bool {

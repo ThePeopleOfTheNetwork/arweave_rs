@@ -1,12 +1,10 @@
 use openssl::sha;
 
-// WIP
-
 const FEISTEL_BLOCK_LENGTH: usize = 32;
 
+/// Takes a `right]` and `key` arrays of bytes, takes the first 32 bytes of each
+/// and SHA-256 hashes them combined 64 bytes together, returning the hash
 pub fn feistel_hash(right: &[u8], key: &[u8]) -> [u8; 32] {
-    let mut hasher = sha::Sha256::new();
-
     // Use only the first FEISTEL_BLOCK_LENGTH bytes of right and key
     let right_slice: &[u8; FEISTEL_BLOCK_LENGTH] = &right[..FEISTEL_BLOCK_LENGTH.min(right.len())]
         .try_into()
@@ -19,12 +17,16 @@ pub fn feistel_hash(right: &[u8], key: &[u8]) -> [u8; 32] {
             "the key_slice should be {FEISTEL_BLOCK_LENGTH} bytes"
         ));
 
+    // SHA-256 hash the first 32 bytes of [right] and [key] together
+    let mut hasher = sha::Sha256::new();
     hasher.update(right_slice);
     hasher.update(key_slice);
 
     hasher.finish()
 }
 
+/// Takes the left and right feistel blocks and uses the key to decrypt them,
+/// returning the decrypted left and right block
 pub fn feistel_decrypt_block(
     in_left: &[u8],
     in_right: &[u8],
@@ -37,7 +39,7 @@ pub fn feistel_decrypt_block(
     let key = &in_key[key_offset..];
 
     // feistel_hashes the first FEISTEL_BLOCK of [in_left] and the
-    // second FEISTEL_BLOCK of [in_key]
+    // second FEISTEL_BLOCK of [in_key] to produce a [key_hash]
     let key_hash = feistel_hash(in_left, key);
 
     // XOR [in_right] with the [key_hash], storing it in [left] and copy
@@ -64,6 +66,9 @@ pub fn feistel_decrypt_block(
     (out_left, out_right)
 }
 
+/// Given a `ciphertext` array and an `in_key` array, both will be 
+/// `RANDOMX_ENTROPY_SIZE` when decrypting Arweave chunks. `ciphertext` will
+/// be the encrypted chunk and `key` will be the RandomX entropy.
 pub fn feistel_decrypt(ciphertext: &[u8], in_key: &[u8]) -> Vec<u8> {
     let num_steps = ciphertext.len() / (2 * FEISTEL_BLOCK_LENGTH);
     let mut plaintext = vec![0u8; ciphertext.len()];

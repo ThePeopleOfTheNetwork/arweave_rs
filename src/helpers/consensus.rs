@@ -1,7 +1,8 @@
 #![allow(dead_code)]
+use arweave_randomx_rs::*;
 use openssl::sha;
 
-use crate::{helpers::u256, json_types::ArweaveBlockHeader, validator::hash_index::BlockBounds};
+use crate::{helpers::u256, json_types::ArweaveBlockHeader};
 
 //The key to initialize the RandomX state from, for RandomX packing.
 pub const RANDOMX_PACKING_KEY: &[u8] = b"default arweave 2.5 pack key";
@@ -85,16 +86,16 @@ pub fn get_chunk_entropy_input(
 
 /// Return the smallest multiple of 256 KiB counting from StrictDataSplitThreshold
 /// bigger than or equal to Offset.
-pub fn get_byte_offset(offset: u256, block_bounds: &BlockBounds) -> u128 {
-    if block_bounds.block_end_offset >= STRICT_DATA_SPLIT_THRESHOLD {
+pub fn get_byte_offset(offset: u256, block_start_offset: u128, block_end_offset: u128) -> u128 {
+    if block_end_offset >= STRICT_DATA_SPLIT_THRESHOLD {
         let new_offset = offset.as_u128() + 1;
         let diff = new_offset - STRICT_DATA_SPLIT_THRESHOLD;
         STRICT_DATA_SPLIT_THRESHOLD
             + ((diff - 1) / DATA_CHUNK_SIZE as u128 + 1) * DATA_CHUNK_SIZE as u128
             - DATA_CHUNK_SIZE as u128
-            - block_bounds.block_start_offset
+            - block_start_offset
     } else {
-        offset.as_u128() - block_bounds.block_start_offset
+        offset.as_u128() - block_start_offset
     }
 }
 
@@ -156,6 +157,50 @@ pub fn get_seed_data(step_number: u64, previous_block: &ArweaveBlockHeader) -> S
             vdf_difficulty: previous_info.vdf_difficulty.unwrap_or(VDF_SHA_1S),
         }
     }
+}
+
+/// The reference erlang implementation refers to this as ar_block:compute_h0
+/// In the erlang reference implementation this hash is known as H0
+pub fn compute_mining_hash(
+    vdf_output: [u8; 32],
+    partition_number: u32,
+    vdf_seed: [u8; 48],
+    mining_address: [u8; 32],
+    randomx_vm: Option<&RandomXVM>,
+) -> [u8; 32] {
+    let pn: u256 = u256::from(partition_number);
+    let mut partition_bytes: [u8; 32] = [0u8; 32];
+    pn.to_big_endian(&mut partition_bytes);
+
+    let mut input = Vec::new();
+    input.append(&mut vdf_output.to_vec());
+    input.append(&mut partition_bytes.to_vec());
+    input.append(&mut vdf_seed[..32].to_vec()); // Use first 32 bytes of vdf_seed
+    input.append(&mut mining_address.to_vec());
+
+    // These variables extend the life of the created RandomX instance outside
+    // the scope of the [None] match arm below
+    let vm: &RandomXVM;
+    let vm_storage: Option<RandomXVM>;
+
+    // If needed, lazy initialize a RandomXVM and borrow a reference to it
+    match randomx_vm {
+        Some(existing_vm) => {
+            vm = existing_vm;
+        }
+        None => {
+            // Creates a disposable RandomXVM instance for use in this function
+            vm_storage = Some(create_randomx_vm(
+                RandomXMode::FastHashing,
+                RANDOMX_PACKING_KEY,
+            ));
+            vm = vm_storage.as_ref().unwrap();
+        }
+    };
+
+    let mining_hash = vm.calculate_hash(&input).unwrap();
+    let hash_array: [u8; 32] = mining_hash.try_into().unwrap();
+    hash_array
 }
 
 /// (ar_block.erl) Return {RecallRange1Start, RecallRange2Start} - the start offsets
