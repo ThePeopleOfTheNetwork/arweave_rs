@@ -2,7 +2,7 @@
 use self::hash_index::{HashIndex, Initialized};
 use primitive_types::U256;
 use crate::{
-    helpers::consensus::*,
+    helpers::{consensus::*, hashes::{H256, H384}, Base64},
     json_types::{ArweaveBlockHeader, DoubleSigningProof, PoaData},
     packing::{feistel::feistel_decrypt, pack::compute_entropy},
     validator::merkle::validate_path,
@@ -178,14 +178,14 @@ fn proof_size_is_valid(poa_data: &PoaData, block_height: u64) -> bool {
         && chunk.len() <= (DATA_CHUNK_SIZE as usize)
 }
 
-fn chunk_hash_is_valid(chunk_hash: &[u8; 32], chunk: &[u8], block_height: u64) -> bool {
+fn chunk_hash_is_valid(chunk_hash: &H256, chunk: &Base64, block_height: u64) -> bool {
     if block_height < FORK_2_7_HEIGHT {
         return true;
     }
 
     let mut hasher = sha::Sha256::new();
-    hasher.update(chunk);
-    let hash = hasher.finish();
+    hasher.update(chunk.0.as_slice());
+    let hash = H256::from(hasher.finish());
     hash == *chunk_hash
 }
 
@@ -292,13 +292,13 @@ fn quick_pow_is_valid(
 ) -> Result<([u8; 32], [u8; 32])> {
     // Current block_header properties
     let nonce_limiter_info = &block_header.nonce_limiter_info;
-    let vdf_output: [u8; 32] = nonce_limiter_info.output;
-    let mining_address: [u8; 32] = block_header.reward_addr;
+    let vdf_output = nonce_limiter_info.output;
+    let mining_address: H256 = block_header.reward_addr;
     let partition_number: u32 = block_header.partition_number as u32;
 
     // Properties from previous block header
     let previous_nonce_limiter_info = &previous_block_header.nonce_limiter_info;
-    let previous_vdf_seed: [u8; 48] = previous_nonce_limiter_info.seed;
+    let previous_vdf_seed: H384 = previous_nonce_limiter_info.seed;
 
     let mining_hash = compute_mining_hash(
         vdf_output,
@@ -310,7 +310,7 @@ fn quick_pow_is_valid(
 
     // Now combine H0 with the preimage to create the solution_hash
     let hash_preimage = block_header.hash_preimage;
-    let solution_hash = compute_solution_hash(&mining_hash, &hash_preimage);
+    let solution_hash = compute_solution_hash(&mining_hash, &hash_preimage.as_bytes());
 
     let solution_hash_value_big: U256 = U256::from_big_endian(&solution_hash);
 
@@ -395,7 +395,7 @@ fn poa_is_valid(
     poa_data: &PoaData,
     recall_byte: U256,
     hash_index: &HashIndex<Initialized>,
-    reward_addr: &[u8; 32],
+    reward_addr: &H256,
     randomx_vm: Option<&RandomXVM>,
 ) -> bool {
     // Use the hash_index to look up the BlockStart, BlockEnd, and tx_root
@@ -470,14 +470,14 @@ fn poa_is_valid(
 
     // Create packed entropy scratchpad for the chunk + reward_address
     // randomx_long_with_entropy.cpp: 51
-    let input = get_chunk_entropy_input(chunk_offset.into(), &block_bounds.tx_root, reward_addr);
+    let input = get_chunk_entropy_input(chunk_offset.into(), &H256::from(block_bounds.tx_root), reward_addr);
     let randomx_program_count = RANDOMX_PACKING_ROUNDS_2_6;
     let entropy = compute_entropy(&input, randomx_program_count, randomx_vm);
  
 
     // Use a feistel cypher + entropy to decrypt the chunk
     // randomx_long_with_entropy.cpp: 113
-    let decrypted_chunk = feistel_decrypt(&poa_data.chunk, &entropy);
+    let decrypted_chunk = feistel_decrypt(&poa_data.chunk.as_slice(), &entropy);
 
     // Because all chunks are packed as DATA_CHUNK_SIZE, if the proof chunk is
     // smaller we need to trim off the excess padding introduced by packing
@@ -529,10 +529,10 @@ trait ExtendBytes {
     fn extend_u64(&mut self, size_bytes: usize, val: &u64) -> &mut Self;
     fn extend_big(&mut self, size_bytes: usize, val: &U256) -> &mut Self;
     fn extend_optional_big(&mut self, size_bytes: usize, val: &Option<U256>) -> &mut Self;
-    fn extend_optional_hash(&mut self, size_bytes: usize, val: &Option<[u8; 32]>) -> &mut Self;
+    fn extend_optional_hash(&mut self, size_bytes: usize, val: &Option<H256>) -> &mut Self;
     fn extend_buf(&mut self, size_bytes: usize, val: &[u8]) -> &mut Self;
     fn extend_buf_list(&mut self, size_bytes: usize, val: &[Vec<u8>]) -> &mut Self;
-    fn extend_hash_list(&mut self, val: &[[u8; 32]]) -> &mut Self;
+    fn extend_hash_list(&mut self, val: &[H256]) -> &mut Self;
     fn trim_leading_zero_bytes(slice: &[u8]) -> &[u8] {
         let mut non_zero_index = slice.iter().position(|&x| x != 0).unwrap_or(slice.len());
         non_zero_index = std::cmp::min(non_zero_index, slice.len() - 1);
@@ -618,7 +618,7 @@ impl ExtendBytes for Vec<u8> {
         self
     }
 
-    fn extend_optional_hash(&mut self, size_bytes: usize, val: &Option<[u8; 32]>) -> &mut Self {
+    fn extend_optional_hash(&mut self, size_bytes: usize, val: &Option<H256>) -> &mut Self {
         let mut bytes: Vec<u8> = Vec::new();
         if let Some(val_bytes) = val {
             bytes.extend_from_slice(&val_bytes[..]);
@@ -637,13 +637,13 @@ impl ExtendBytes for Vec<u8> {
         self
     }
 
-    fn extend_hash_list(&mut self, data: &[[u8; 32]]) -> &mut Self {
+    fn extend_hash_list(&mut self, data: &[H256]) -> &mut Self {
         // Number of hashes in the list, as 2 bytes
         let num_elements = data.len() as u16;
         self.extend_from_slice(&num_elements.to_be_bytes());
         // Iterate over each hash in the data vector and append it
         for elem in data.iter() {
-            self.extend_from_slice(elem);
+            self.extend_from_slice(elem.as_bytes());
         }
         self
     }
@@ -660,20 +660,20 @@ fn block_hash_is_valid(block_header: &ArweaveBlockHeader) -> bool {
     //let expected: Vec<u8> = vec![];
 
     let mut buff: Vec<u8> = Vec::new();
-    buff.extend_buf(1, &b.previous_block)
+    buff.extend_buf(1, &b.previous_block.as_bytes())
         .extend_u64(1, &b.timestamp)
         .extend_u64(2, &b.nonce)
         .extend_u64(1, &b.height)
         .extend_buf(2, &diff_bytes)
         .extend_big(2, &b.cumulative_diff)
         .extend_u64(1, &b.last_retarget)
-        .extend_buf(1, &b.hash)
+        .extend_buf(1, &b.hash.as_bytes())
         .extend_u64(2, &b.block_size)
         .extend_u64(2, &b.weave_size)
-        .extend_buf(1, &b.reward_addr)
+        .extend_buf(1, &b.reward_addr.as_bytes())
         .extend_optional_hash(1, &b.tx_root)
-        .extend_buf(1, &b.wallet_list)
-        .extend_buf(1, &b.hash_list_merkle)
+        .extend_buf(1, &b.wallet_list.as_bytes())
+        .extend_buf(1, &b.hash_list_merkle.as_bytes())
         .extend_u64(1, &b.reward_pool)
         .extend_u64(1, &b.packing_2_5_threshold)
         .extend_u64(1, &b.strict_data_split_threshold)
@@ -685,23 +685,23 @@ fn block_hash_is_valid(block_header: &ArweaveBlockHeader) -> bool {
         .extend_buf_list(1, &b.txs)
         .extend_u64(1, &b.reward)
         .extend_u64(2, &b.recall_byte)
-        .extend_buf(1, &b.hash_preimage)
+        .extend_buf(1, &b.hash_preimage.as_bytes())
         .extend_optional_big(2, &b.recall_byte2)
-        .extend_buf(2, &b.reward_key)
+        .extend_buf(2, &b.reward_key.as_slice())
         .extend_u64(1, &b.partition_number)
-        .extend_raw_buf(32, &nonce_info.output)
+        .extend_raw_buf(32, &nonce_info.output.as_bytes())
         .extend_raw_buf(8, &nonce_info.global_step_number.to_be_bytes())
-        .extend_raw_buf(48, &nonce_info.seed)
-        .extend_raw_buf(48, &nonce_info.next_seed)
+        .extend_raw_buf(48, &nonce_info.seed.as_bytes())
+        .extend_raw_buf(48, &nonce_info.next_seed.as_bytes())
         .extend_raw_buf(32, &nonce_info.zone_upper_bound.to_be_bytes())
         .extend_raw_buf(32, &nonce_info.next_zone_upper_bound.to_be_bytes())
-        .extend_buf(1, &b.nonce_limiter_info.prev_output)
+        .extend_buf(1, &b.nonce_limiter_info.prev_output.as_bytes())
         .extend_hash_list(&b.nonce_limiter_info.checkpoints)
         .extend_hash_list(&b.nonce_limiter_info.last_step_checkpoints)
-        .extend_buf(1, &b.previous_solution_hash)
+        .extend_buf(1, &b.previous_solution_hash.as_bytes())
         .extend_big(1, &b.price_per_gib_minute)
         .extend_big(1, &b.scheduled_price_per_gib_minute)
-        .extend_raw_buf(32, &b.reward_history_hash)
+        .extend_raw_buf(32, &b.reward_history_hash.as_bytes())
         .extend_big(1, &b.debt_supply)
         .extend_raw_big(3, &b.kryder_plus_rate_multiplier)
         .extend_raw_big(1, &b.kryder_plus_rate_multiplier_latch)
@@ -711,13 +711,13 @@ fn block_hash_is_valid(block_header: &ArweaveBlockHeader) -> bool {
         .extend_big(2, &b.previous_cumulative_diff)
         // Added in 2.7
         .extend_big(2, &b.merkle_rebase_support_threshold)
-        .extend_buf(3, &b.poa.data_path)
-        .extend_buf(3, &b.poa.tx_path)
-        .extend_buf(3, &b.poa2.data_path)
-        .extend_buf(3, &b.poa2.tx_path)
-        .extend_raw_buf(32, &b.chunk_hash)
+        .extend_buf(3, &b.poa.data_path.as_slice())
+        .extend_buf(3, &b.poa.tx_path.as_slice())
+        .extend_buf(3, &b.poa2.data_path.as_slice())
+        .extend_buf(3, &b.poa2.tx_path.as_slice())
+        .extend_raw_buf(32, &b.chunk_hash.as_bytes())
         .extend_optional_hash(1, &b.chunk2_hash)
-        .extend_raw_buf(32, &b.block_time_history_hash)
+        .extend_raw_buf(32, &b.block_time_history_hash.as_bytes())
         .extend_u64(1, &nonce_info.vdf_difficulty.unwrap_or_default())
         .extend_u64(1, &nonce_info.next_vdf_difficulty.unwrap_or_default());
 
@@ -734,8 +734,8 @@ fn block_hash_is_valid(block_header: &ArweaveBlockHeader) -> bool {
 
     let mut hasher = sha::Sha384::new();
     hasher.update(&signed_hash);
-    hasher.update(&b.signature);
-    let hash = hasher.finish();
+    hasher.update(&b.signature.as_slice());
+    let hash = H384::from(hasher.finish());
 
     hash == b.indep_hash
 }

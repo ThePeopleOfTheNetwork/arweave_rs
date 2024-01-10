@@ -180,55 +180,55 @@ fn main() -> Result<()> {
     // In the end we just want to run our highly parallelized tests sequentially
     // one by one, which is what these lines of code accomplish.
 
-    // run_test(
-    //     test_last_step_checkpoints_base,
-    //     "test_last_step_checkpoints_base",
-    //     &mut logger,
-    // );
+    run_test(
+        test_last_step_checkpoints_base,
+        "test_last_step_checkpoints_base",
+        &mut logger,
+    );
 
-    // run_test(test_checkpoints_base, "test_checkpoints_base", &mut logger);
+    run_test(test_checkpoints_base, "test_checkpoints_base", &mut logger);
 
-    // run_test(
-    //     test_checkpoints_reset,
-    //     "test_checkpoints_reset",
-    //     &mut logger,
-    // );
+    run_test(
+        test_checkpoints_reset,
+        "test_checkpoints_reset",
+        &mut logger,
+    );
 
-    // run_test(
-    //     test_checkpoints_reset_first_step,
-    //     "test_checkpoints_reset_first_step",
-    //     & mut logger
-    // );
+    run_test(
+        test_checkpoints_reset_first_step,
+        "test_checkpoints_reset_first_step",
+        & mut logger
+    );
 
-    // run_test(
-    //     test_last_step_checkpoints_with_last_step_reset,
-    //     "test_last_step_checkpoints_with_last_step_reset",
-    //     &mut logger,
-    // );
+    run_test(
+        test_last_step_checkpoints_with_last_step_reset,
+        "test_last_step_checkpoints_with_last_step_reset",
+        &mut logger,
+    );
 
-    // run_test(
-    //     test_checkpoints_reset_last_step,
-    //     "test_checkpoints_reset_last_step",
-    //     &mut logger,
-    // );
+    run_test(
+        test_checkpoints_reset_last_step,
+        "test_checkpoints_reset_last_step",
+        &mut logger,
+    );
 
-    // run_test(
-    //     test_checkpoints_reset_last_step_next,
-    //     "test_checkpoints_reset_last_step_next",
-    //     &mut logger,
-    // );
+    run_test(
+        test_checkpoints_reset_last_step_next,
+        "test_checkpoints_reset_last_step_next",
+        &mut logger,
+    );
 
-    // run_test(
-    //     test_checkpoints_reset_2nd_to_last_step,
-    //     "test_checkpoints_reset_2nd_to_last_step",
-    //     &mut logger,
-    // );
+    run_test(
+        test_checkpoints_reset_2nd_to_last_step,
+        "test_checkpoints_reset_2nd_to_last_step",
+        &mut logger,
+    );
 
-    // run_test(
-    //     test_checkpoints_reset_3rd_to_last_step,
-    //     "test_checkpoints_reset_3rd_to_last_step",
-    //     &mut logger,
-    // );
+    run_test(
+        test_checkpoints_reset_3rd_to_last_step,
+        "test_checkpoints_reset_3rd_to_last_step",
+        &mut logger,
+    );
 
     //run_test(test_pack_chunk, "test_pack_chunk", &mut logger);
     // run_test(test_validator_init, "test_validator_init", &mut logger);
@@ -382,8 +382,8 @@ fn test_validator_index_jsons() -> bool {
 
 fn test_pack_chunk() -> bool {
     let (block_header, _) = &TEST_DATA.packing_case;
-    let reward_address: [u8; 32] = block_header.reward_addr;
-    let tx_root: [u8; 32] = block_header.tx_root.unwrap();
+    let reward_address = block_header.reward_addr;
+    let tx_root = block_header.tx_root.unwrap();
     let chunk = pack_chunk(U256::from(0), &reward_address, &tx_root);
     chunk.len() > 0
 }

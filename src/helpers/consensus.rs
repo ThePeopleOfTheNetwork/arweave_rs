@@ -5,6 +5,8 @@ use primitive_types::U256;
 
 use crate::json_types::ArweaveBlockHeader;
 
+use super::hashes::{H256, H384};
+
 //The key to initialize the RandomX state from, for RandomX packing.
 pub const RANDOMX_PACKING_KEY: &[u8] = b"default arweave 2.5 pack key";
 // pub const RANDOMX_PACKING_ROUNDS_2_5: usize = 8*20;
@@ -72,16 +74,16 @@ pub const MAX_TX_PATH_SIZE: usize = 2176;
 /// replicas per invested dollar.
 pub fn get_chunk_entropy_input(
     chunk_offset: U256,
-    tx_root: &[u8; 32],
-    reward_addr: &[u8; 32],
+    tx_root: &H256,
+    reward_addr: &H256
 ) -> [u8; 32] {
     let mut chunk_offset_bytes: [u8; 32] = [0; 32];
     chunk_offset.to_big_endian(&mut chunk_offset_bytes);
 
     let mut hasher = sha::Sha256::new();
     hasher.update(&chunk_offset_bytes);
-    hasher.update(tx_root);
-    hasher.update(reward_addr);
+    hasher.update(tx_root.as_bytes());
+    hasher.update(reward_addr.as_bytes());
     hasher.finish()
 }
 
@@ -117,8 +119,8 @@ pub fn get_vdf_steps_since_reset(global_step_number: u64) -> usize {
 }
 
 pub struct SeedData {
-    pub seed: [u8; 48],
-    pub next_seed: [u8; 48],
+    pub seed: H384,
+    pub next_seed: H384,
     pub partition_upper_bound: u64,
     pub next_partition_upper_bound: u64,
     pub vdf_difficulty: u64,
@@ -163,10 +165,10 @@ pub fn get_seed_data(step_number: u64, previous_block: &ArweaveBlockHeader) -> S
 /// The reference erlang implementation refers to this as ar_block:compute_h0
 /// In the erlang reference implementation this hash is known as H0
 pub fn compute_mining_hash(
-    vdf_output: [u8; 32],
+    vdf_output: H256,
     partition_number: u32,
-    vdf_seed: [u8; 48],
-    mining_address: [u8; 32],
+    vdf_seed: H384,
+    mining_address: H256,
     randomx_vm: Option<&RandomXVM>,
 ) -> [u8; 32] {
     let pn: U256 = U256::from(partition_number);

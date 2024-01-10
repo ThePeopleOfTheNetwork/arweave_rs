@@ -4,6 +4,8 @@ use color_eyre::eyre::eyre;
 use eyre::Error;
 use openssl::sha;
 
+use crate::helpers::Base64;
+
 /// Single struct used for original data chunks (Leaves) and branch nodes (hashes of pairs of child nodes).
 #[derive(Debug, PartialEq, Clone)]
 pub struct Node {
@@ -93,7 +95,7 @@ pub struct ValidatePathResult {
 
 pub fn validate_path(
     root_hash: [u8; HASH_SIZE],
-    path_buff: &Vec<u8>,
+    path_buff: &Base64,
     target_offset: u128,
 ) -> Result<ValidatePathResult, Error> {
     // Split proof into branches and leaf. Leaf is the final proof and branches
