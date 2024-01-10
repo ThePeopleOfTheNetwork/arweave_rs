@@ -169,16 +169,6 @@ where
         None => Ok(None),
     }
 }
-
-/// serde helper method to convert a JSON `string` value to a `u64`
-fn string_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: String = Deserialize::deserialize(deserializer)?;
-    s.parse::<u64>().map_err(serde::de::Error::custom)
-}
-
 fn string_to_u256<'de, D>(deserializer: D) -> Result<U256, D::Error>
 where
     D: Deserializer<'de>,

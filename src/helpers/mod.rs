@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use eyre::Error;
-use serde::{de::{Error as _, self}, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 use self::hashes::{H256, H384};
 
