@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 use self::hash_index::{HashIndex, Initialized};
+use primitive_types::U256;
 use crate::{
-    helpers::{consensus::*, u256},
+    helpers::consensus::*,
     json_types::{ArweaveBlockHeader, DoubleSigningProof, PoaData},
     packing::{feistel::feistel_decrypt, pack::compute_entropy},
     validator::merkle::validate_path,
@@ -228,7 +229,7 @@ fn difficulty_is_valid(
 fn calculate_difficulty(
     block_header: &ArweaveBlockHeader,
     previous_block_header: &ArweaveBlockHeader,
-) -> Result<u256> {
+) -> Result<U256> {
     let height = block_header.height;
     let timestamp = block_header.timestamp;
 
@@ -256,8 +257,8 @@ fn calculate_difficulty(
         Ok(previous_diff)
     } else {
         // Calculate a new difficulty
-        let min_diff = u256::from(MIN_SPORA_DIFFICULTY);
-        let max_diff = u256::max_value();
+        let min_diff = U256::from(MIN_SPORA_DIFFICULTY);
+        let max_diff = U256::max_value();
         // We have to + 1 in these equations because MAX_DIFF in erlang is one larger
         // than what will fit in U256::max_value() and would cause integer overflow
         let diff_inverse = ((max_diff - previous_diff + 1) * actual_time) / target_time;
@@ -277,9 +278,9 @@ fn cumulative_diff_is_valid(
 fn compute_cumulative_diff(
     block_header: &ArweaveBlockHeader,
     previous_block_header: &ArweaveBlockHeader,
-) -> u256 {
+) -> U256 {
     // TODO: Make return val a result and check for block height > 2.5 fork
-    let max_diff = u256::max_value();
+    let max_diff = U256::max_value();
     let delta = max_diff / (max_diff - block_header.diff);
     previous_block_header.cumulative_diff + delta
 }
@@ -311,9 +312,9 @@ fn quick_pow_is_valid(
     let hash_preimage = block_header.hash_preimage;
     let solution_hash = compute_solution_hash(&mining_hash, &hash_preimage);
 
-    let solution_hash_value_big: u256 = u256::from_big_endian(&solution_hash);
+    let solution_hash_value_big: U256 = U256::from_big_endian(&solution_hash);
 
-    let diff: u256 = block_header.diff;
+    let diff: U256 = block_header.diff;
     if solution_hash_value_big > diff {
         Ok((mining_hash, solution_hash))
     } else {
@@ -367,7 +368,7 @@ fn nonce_is_valid(block_header: &ArweaveBlockHeader) -> bool {
 fn recall_bytes_is_valid(
     block_header: &ArweaveBlockHeader,
     mining_hash: &[u8; 32],
-) -> Result<(u256, Option<u256>)> {
+) -> Result<(U256, Option<U256>)> {
     let (recall_range1_start, recall_range2_start) = get_recall_range(
         mining_hash,
         block_header.partition_number,
@@ -378,12 +379,12 @@ fn recall_bytes_is_valid(
     let recall_byte_2 = recall_range2_start + block_header.nonce * DATA_CHUNK_SIZE as u64;
 
     if let Some(b2) = block_header.recall_byte2 {
-        if recall_byte_2 == b2 && recall_byte_1 == u256::from(block_header.recall_byte) {
+        if recall_byte_2 == b2 && recall_byte_1 == U256::from(block_header.recall_byte) {
             Ok((recall_byte_1, Some(recall_byte_2)))
         } else {
             Err(eyre!("invalid recall byte 2"))
         }
-    } else if recall_byte_1 == u256::from(block_header.recall_byte) {
+    } else if recall_byte_1 == U256::from(block_header.recall_byte) {
         Ok((recall_byte_1, None))
     } else {
         Err(eyre!("invalid recall byte 1"))
@@ -392,7 +393,7 @@ fn recall_bytes_is_valid(
 
 fn poa_is_valid(
     poa_data: &PoaData,
-    recall_byte: u256,
+    recall_byte: U256,
     hash_index: &HashIndex<Initialized>,
     reward_addr: &[u8; 32],
     randomx_vm: Option<&RandomXVM>,
@@ -524,10 +525,10 @@ impl DoubleSigningProofBytes for DoubleSigningProof {
 trait ExtendBytes {
     fn extend_raw_buf(&mut self, raw_size: usize, val: &[u8]) -> &mut Self;
     fn extend_optional_raw_buf(&mut self, raw_size: usize, val: &Option<Vec<u8>>) -> &mut Self;
-    fn extend_raw_big(&mut self, raw_size: usize, val: &u256) -> &mut Self;
+    fn extend_raw_big(&mut self, raw_size: usize, val: &U256) -> &mut Self;
     fn extend_u64(&mut self, size_bytes: usize, val: &u64) -> &mut Self;
-    fn extend_big(&mut self, size_bytes: usize, val: &u256) -> &mut Self;
-    fn extend_optional_big(&mut self, size_bytes: usize, val: &Option<u256>) -> &mut Self;
+    fn extend_big(&mut self, size_bytes: usize, val: &U256) -> &mut Self;
+    fn extend_optional_big(&mut self, size_bytes: usize, val: &Option<U256>) -> &mut Self;
     fn extend_optional_hash(&mut self, size_bytes: usize, val: &Option<[u8; 32]>) -> &mut Self;
     fn extend_buf(&mut self, size_bytes: usize, val: &[u8]) -> &mut Self;
     fn extend_buf_list(&mut self, size_bytes: usize, val: &[Vec<u8>]) -> &mut Self;
@@ -569,7 +570,7 @@ impl ExtendBytes for Vec<u8> {
         self.extend_raw_buf(raw_size, &bytes)
     }
 
-    fn extend_raw_big(&mut self, raw_size: usize, val: &u256) -> &mut Self {
+    fn extend_raw_big(&mut self, raw_size: usize, val: &U256) -> &mut Self {
         let mut bytes = [0u8; 32];
         val.to_big_endian(&mut bytes);
         self.extend_raw_buf(raw_size, &bytes)
@@ -586,7 +587,7 @@ impl ExtendBytes for Vec<u8> {
         self
     }
 
-    fn extend_big(&mut self, num_size_bytes: usize, val: &u256) -> &mut Self {
+    fn extend_big(&mut self, num_size_bytes: usize, val: &U256) -> &mut Self {
         let mut be_bytes = [0u8; 32];
         val.to_big_endian(&mut be_bytes);
         let bytes = Self::trim_leading_zero_bytes(&be_bytes);
@@ -598,7 +599,7 @@ impl ExtendBytes for Vec<u8> {
         self
     }
 
-    fn extend_optional_big(&mut self, size_bytes: usize, val: &Option<u256>) -> &mut Self {
+    fn extend_optional_big(&mut self, size_bytes: usize, val: &Option<U256>) -> &mut Self {
         if let Some(big_int) = val {
             self.extend_big(size_bytes, big_int)
         } else {

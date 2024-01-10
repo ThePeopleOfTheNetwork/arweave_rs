@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 use arweave_randomx_rs::*;
 use openssl::sha;
+use primitive_types::U256;
 
-use crate::{helpers::u256, json_types::ArweaveBlockHeader};
+use crate::json_types::ArweaveBlockHeader;
 
 //The key to initialize the RandomX state from, for RandomX packing.
 pub const RANDOMX_PACKING_KEY: &[u8] = b"default arweave 2.5 pack key";
@@ -70,7 +71,7 @@ pub const MAX_TX_PATH_SIZE: usize = 2176;
 /// single dataset replica, essentially incentivizing miners to create more weave
 /// replicas per invested dollar.
 pub fn get_chunk_entropy_input(
-    chunk_offset: u256,
+    chunk_offset: U256,
     tx_root: &[u8; 32],
     reward_addr: &[u8; 32],
 ) -> [u8; 32] {
@@ -86,7 +87,7 @@ pub fn get_chunk_entropy_input(
 
 /// Return the smallest multiple of 256 KiB counting from StrictDataSplitThreshold
 /// bigger than or equal to Offset.
-pub fn get_byte_offset(offset: u256, block_start_offset: u128, block_end_offset: u128) -> u128 {
+pub fn get_byte_offset(offset: U256, block_start_offset: u128, block_end_offset: u128) -> u128 {
     if block_end_offset >= STRICT_DATA_SPLIT_THRESHOLD {
         let new_offset = offset.as_u128() + 1;
         let diff = new_offset - STRICT_DATA_SPLIT_THRESHOLD;
@@ -168,7 +169,7 @@ pub fn compute_mining_hash(
     mining_address: [u8; 32],
     randomx_vm: Option<&RandomXVM>,
 ) -> [u8; 32] {
-    let pn: u256 = u256::from(partition_number);
+    let pn: U256 = U256::from(partition_number);
     let mut partition_bytes: [u8; 32] = [0u8; 32];
     pn.to_big_endian(&mut partition_bytes);
 
@@ -209,7 +210,7 @@ pub fn get_recall_range(
     h0: &[u8; 32],
     partition_number: u64,
     partition_upper_bound: u64,
-) -> (u256, u256) {
+) -> (U256, U256) {
     // Decode the first 8 bytes of H0 to an unsigned integer (big-endian)
     let recall_range1_offset =
         u64::from_be_bytes(h0.get(0..8).unwrap_or(&[0; 8]).try_into().unwrap());
@@ -219,7 +220,7 @@ pub fn get_recall_range(
         + recall_range1_offset % std::cmp::min(PARTITION_SIZE, partition_upper_bound);
 
     // Decode the entire H0 to an unsigned integer (big-endian)
-    let recall_range2_start = u256::from_big_endian(h0) % u256::from(partition_upper_bound);
+    let recall_range2_start = U256::from_big_endian(h0) % U256::from(partition_upper_bound);
 
-    (u256::from(recall_range1_start), recall_range2_start)
+    (U256::from(recall_range1_start), recall_range2_start)
 }

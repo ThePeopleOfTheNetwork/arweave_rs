@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 use rayon::prelude::*;
 use openssl::sha;
-
-use crate::{json_types::NonceLimiterInfo, helpers::{u256, consensus::*}};
+use primitive_types::U256;
+use crate::{json_types::NonceLimiterInfo, helpers::consensus::*};
 
 // erlang consensus constants
 // ================================================
@@ -77,12 +77,12 @@ pub fn apply_reset_seed(seed: [u8; 32], reset_seed: [u8; 48]) -> [u8; 32] {
 ///
 /// - `Vec<[u8;32]>` A Vec containing the calculated checkpoint hashes `checkpoint_count` in length.
 pub fn vdf_sha2(
-    salt: u256,
+    salt: U256,
     seed: [u8; 32],
     num_checkpoints: usize,
     num_iterations: usize,
 ) -> Vec<[u8; 32]> {
-    let mut local_salt: u256 = salt;
+    let mut local_salt: U256 = salt;
     let mut local_seed: [u8; 32] = seed;
     let mut salt_bytes: [u8; 32] = [0; 32];
     let mut checkpoints: Vec<[u8; 32]> = vec![[0; 32]; num_checkpoints];
@@ -158,7 +158,7 @@ pub fn last_step_checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
     let mut test: Vec<[u8; 32]> = (0..NUM_CHECKPOINTS_IN_VDF_STEP)
         .into_par_iter()
         .map(|i| {
-            let salt: u256 = (step_number_to_salt_number(global_step_number - 1) + i).into();
+            let salt: U256 = (step_number_to_salt_number(global_step_number - 1) + i).into();
             let res = vdf_sha2(salt, cp[i], 1, num_iterations);
             res[0]
         })
@@ -229,7 +229,7 @@ pub fn checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
     let mut test: Vec<[u8; 32]> = (0..steps.len() - 1)
         .into_par_iter()
         .map(|i| {
-            let salt: u256 = (step_number_to_salt_number(start_step_number + i)).into();
+            let salt: U256 = (step_number_to_salt_number(start_step_number + i)).into();
             let mut seed = steps[i];
             if i == reset_index {
                 seed = apply_reset_seed(seed, reset_seed);

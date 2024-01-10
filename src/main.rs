@@ -3,7 +3,8 @@
 use arweave_randomx_rs::*;
 use arweave_rs::validator::hash_index::Initialized;
 use eyre::Result;
-use helpers::{DecodeHash, u256};
+use helpers::consensus::RANDOMX_PACKING_KEY;
+use helpers::DecodeHash;
 use json_types::{ArweaveBlockHeader, NonceLimiterInfo};
 use lazy_static::lazy_static;
 use openssl::hash;
@@ -16,6 +17,7 @@ use validator::hash_index::HashIndex;
 use validator::hash_index_scraper::request_hash_index_jsons;
 use validator::{compute_solution_hash, pre_validate_block};
 use vdf::verify::*;
+use primitive_types::U256;
 
 use crate::validator::hash_index_scraper::current_block_height;
 
@@ -338,12 +340,14 @@ fn test_pre_validation() -> bool {
     let hash_index: HashIndex = HashIndex::new();
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let hash_index = runtime.block_on(hash_index.init()).unwrap();
+
+    let randomx_vm = create_randomx_vm(RandomXMode::FastInitialization, RANDOMX_PACKING_KEY);
     
-    let solution_hash = pre_validate_block(block_header, previous_block_header, &hash_index, None).unwrap();
+    let solution_hash = pre_validate_block(block_header, previous_block_header, &hash_index, Some(&randomx_vm)).unwrap();
 
-    let solution_hash_value_big: u256 = u256::from_big_endian(&solution_hash);
+    let solution_hash_value_big: U256 = U256::from_big_endian(&solution_hash);
 
-    let diff: u256 = block_header.diff;
+    let diff: U256 = block_header.diff;
 
     solution_hash_value_big > diff
 }
@@ -380,7 +384,7 @@ fn test_pack_chunk() -> bool {
     let (block_header, _) = &TEST_DATA.packing_case;
     let reward_address: [u8; 32] = block_header.reward_addr;
     let tx_root: [u8; 32] = block_header.tx_root.unwrap();
-    let chunk = pack_chunk(u256::from(0), &reward_address, &tx_root);
+    let chunk = pack_chunk(U256::from(0), &reward_address, &tx_root);
     chunk.len() > 0
 }
 

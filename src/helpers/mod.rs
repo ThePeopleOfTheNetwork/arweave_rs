@@ -1,13 +1,3 @@
-#![allow(clippy::assign_op_pattern)]
-use uint::construct_uint;
-
-// Definition of the U256 type
-construct_uint! {
-    /// 256-bit unsigned integer.
-    #[cfg_attr(feature = "scale-info", derive(TypeInfo))]
-    pub struct u256(4);
-}
-
 pub mod consensus;
 
 /// Traits to decode base64_url encoded hashes into their corresponding bytes

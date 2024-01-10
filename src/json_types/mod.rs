@@ -1,13 +1,14 @@
+use primitive_types::U256;
 use serde::{Deserialize, Deserializer};
 use serde_derive::Deserialize;
 use serde_json::Value;
 
-use crate::helpers::{DecodeHash, u256};
+use crate::helpers::DecodeHash;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ArweaveBlockHeader {
     #[serde(deserialize_with = "string_to_u256")]
-    pub merkle_rebase_support_threshold:u256,
+    pub merkle_rebase_support_threshold:U256,
     #[serde(deserialize_with = "decode_to_bytes")]
     pub chunk_hash: [u8; 32],
     #[serde(deserialize_with = "decode_to_bytes")]
@@ -28,32 +29,32 @@ pub struct ArweaveBlockHeader {
     #[serde(deserialize_with = "base64_string_to_bytes")]
     pub reward_key: Vec<u8>,
     #[serde(deserialize_with = "string_to_u256")]
-    pub price_per_gib_minute: u256,
+    pub price_per_gib_minute: U256,
     #[serde(deserialize_with = "string_to_u256")]
-    pub scheduled_price_per_gib_minute: u256,
+    pub scheduled_price_per_gib_minute: U256,
     #[serde(deserialize_with = "decode_to_bytes")]
     pub reward_history_hash: [u8; 32],
     #[serde(deserialize_with = "string_to_u256")]
-    pub debt_supply: u256,
+    pub debt_supply: U256,
     #[serde(deserialize_with = "string_to_u256")]
-    pub kryder_plus_rate_multiplier: u256,
+    pub kryder_plus_rate_multiplier: U256,
     #[serde(deserialize_with = "string_to_u256")]
-    pub kryder_plus_rate_multiplier_latch: u256,
+    pub kryder_plus_rate_multiplier_latch: U256,
     #[serde(deserialize_with = "string_to_u256")]
-    pub denomination: u256,
+    pub denomination: U256,
     pub redenomination_height: u64,
     #[serde(deserialize_with = "decode_to_bytes")]
     pub previous_block: [u8; 48],
     pub timestamp: u64,
     pub last_retarget: u64,
     #[serde(default, deserialize_with = "optional_string_to_u256")]
-    pub recall_byte2: Option<u256>,
+    pub recall_byte2: Option<U256>,
     #[serde(default, deserialize_with = "decode_to_bytes")]
     pub chunk2_hash: Option<[u8; 32]>,
     #[serde(deserialize_with = "decode_to_bytes")]
     pub hash: [u8; 32],
     #[serde(deserialize_with = "string_to_u256")]
-    pub diff: u256,
+    pub diff: U256,
     pub height: u64,
     #[serde(deserialize_with = "decode_to_bytes")]
     pub indep_hash: [u8; 48],
@@ -76,10 +77,10 @@ pub struct ArweaveBlockHeader {
     #[serde(deserialize_with = "string_to_u64")]
     pub block_size: u64,
     #[serde(default, deserialize_with = "string_to_u256")]
-    pub cumulative_diff: u256,
+    pub cumulative_diff: U256,
     pub double_signing_proof: DoubleSigningProof,
     #[serde(deserialize_with = "string_to_u256")]
-    pub previous_cumulative_diff: u256,
+    pub previous_cumulative_diff: U256,
     #[serde(deserialize_with = "parse_usd_to_ar_rate")]
     pub usd_to_ar_rate: [u64; 2],
     #[serde(deserialize_with = "parse_usd_to_ar_rate")]
@@ -127,7 +128,7 @@ impl Default for ArweaveBlockHeader {
             usd_to_ar_rate: Default::default(),
             scheduled_usd_to_ar_rate: Default::default(),
             reward_history_hash: Default::default(),
-            debt_supply: u256::zero(),
+            debt_supply: U256::zero(),
             strict_data_split_threshold: Default::default(),
             txs: Default::default(),
             tags: Default::default(),
@@ -168,17 +169,17 @@ pub struct DoubleSigningProof {
      #[serde(default, deserialize_with = "optional_base64_string_to_bytes")]
     pub sig1: Option<Vec<u8>>,
     #[serde(default, deserialize_with = "optional_string_to_u256")]
-    pub cdiff1: Option<u256>,
+    pub cdiff1: Option<U256>,
     #[serde(default, deserialize_with = "optional_string_to_u256")]
-    pub prev_cdiff1:Option<u256>,
+    pub prev_cdiff1:Option<U256>,
     #[serde(default, deserialize_with = "optional_decode_to_bytes")]
     pub preimage1: Option<[u8;32]>,
      #[serde(default, deserialize_with = "optional_base64_string_to_bytes")]
     pub sig2: Option<Vec<u8>>,
     #[serde(default, deserialize_with = "optional_string_to_u256")]
-    pub cdiff2:Option<u256>,
+    pub cdiff2:Option<U256>,
     #[serde(default, deserialize_with = "optional_string_to_u256")]
-    pub prev_cdiff2:Option<u256>,
+    pub prev_cdiff2:Option<U256>,
     #[serde(default, deserialize_with = "optional_decode_to_bytes")]
     pub preimage2: Option<[u8;32]>
 }
@@ -248,12 +249,12 @@ where
     s.parse::<u64>().map_err(serde::de::Error::custom)
 }
 
-fn string_to_u256<'de, D>(deserializer: D) -> Result<u256, D::Error>
+fn string_to_u256<'de, D>(deserializer: D) -> Result<U256, D::Error>
 where
     D: Deserializer<'de>,
 {
     let s: String = Deserialize::deserialize(deserializer)?;
-    u256::from_dec_str(&s).map_err(serde::de::Error::custom)
+    U256::from_dec_str(&s).map_err(serde::de::Error::custom)
 }
 
 pub fn decode_to_bytes<'de, D, T>(deserializer: D) -> Result<T, D::Error>
@@ -303,7 +304,7 @@ where
     }
 }
 
-fn optional_string_to_u256<'de, D>(deserializer: D) -> Result<Option<u256>, D::Error>
+fn optional_string_to_u256<'de, D>(deserializer: D) -> Result<Option<U256>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -311,7 +312,7 @@ where
     Option::deserialize(deserializer).map_err(serde::de::Error::custom)?;
 
     match opt_val {
-        Some(Value::String(s)) => u256::from_dec_str(&s)
+        Some(Value::String(s)) => U256::from_dec_str(&s)
             .map(Some)
             .map_err(serde::de::Error::custom),
         Some(_) => Err(serde::de::Error::custom("Invalid U256 type")),
