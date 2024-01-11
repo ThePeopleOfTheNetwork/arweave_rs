@@ -1,13 +1,92 @@
-use std::str::FromStr;
-
 use eyre::Error;
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
-
-use self::hashes::{H256, H384};
+use fixed_hash::construct_fixed_hash;
+use serde::{de, de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
+use std::str::FromStr;
+use uint::construct_uint;
 
 pub mod consensus;
-pub mod hashes;
 
+construct_uint! {
+    /// 256-bit unsigned integer.
+    #[cfg_attr(feature = "scale-info", derive(TypeInfo))]
+    pub struct U256(4);
+}
+
+construct_fixed_hash! {
+    pub struct H256(32);
+}
+
+construct_fixed_hash! {
+    pub struct H384(48);
+}
+
+impl H256 {
+    fn to_vec(&self) -> Vec<u8> {
+        self.0.to_vec()
+    }
+}
+
+// Implement Serialize for H256
+impl Serialize for H256 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(base64_url::encode(self.as_bytes()).as_str())
+    }
+}
+
+// Implement Deserialize for H256
+impl<'de> Deserialize<'de> for H256 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: String = Deserialize::deserialize(deserializer)?;
+        DecodeHash::from(&s).map_err(|e| D::Error::custom(format!("{}", e)))
+    }
+}
+
+// Implement Serialize for H384
+impl Serialize for H384 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(base64_url::encode(self.as_bytes()).as_str())
+    }
+}
+
+// Implement Deserialize for H384
+impl<'de> Deserialize<'de> for H384 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: String = Deserialize::deserialize(deserializer)?;
+        DecodeHash::from(&s).map_err(|e| D::Error::custom(format!("{}", e)))
+    }
+}
+
+// Implement Serialize for U256
+impl Serialize for U256 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.to_string().as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for U256 {
+    fn deserialize<D>(deserializer: D) -> Result<U256, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: String = Deserialize::deserialize(deserializer)?;
+        U256::from_dec_str(&s).map_err(serde::de::Error::custom)
+    }
+}
 
 /// A struct of [`Vec<u8>`] used for all data and address fields.
 #[derive(Debug, Clone, PartialEq)]
@@ -51,7 +130,7 @@ impl Base64 {
         self.0.as_slice()
     }
 
-    pub fn split_at(&self, mid:usize) -> (&[u8],&[u8]) {
+    pub fn split_at(&self, mid: usize) -> (&[u8], &[u8]) {
         self.0.split_at(mid)
     }
 }
@@ -103,7 +182,6 @@ impl DecodeHash for H256 {
         H256::zero()
     }
 }
-
 
 impl DecodeHash for H384 {
     fn from(base64_url_string: &str) -> Result<Self, String> {

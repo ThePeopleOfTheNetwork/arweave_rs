@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 use self::hash_index::{HashIndex, Initialized};
-use primitive_types::U256;
 use crate::{
-    helpers::{consensus::*, hashes::{H256, H384}, Base64},
+    helpers::{consensus::*, Base64, H256, U256, H384},
     json_types::{ArweaveBlockHeader, DoubleSigningProof, PoaData},
     packing::{feistel::feistel_decrypt, pack::compute_entropy},
     validator::merkle::validate_path,
@@ -510,11 +509,11 @@ impl DoubleSigningProofBytes for DoubleSigningProof {
             .extend_optional_raw_buf(64, &self.sig1)
             .extend_big(2, &self.cdiff1.unwrap_or_default())
             .extend_big(2, &self.prev_cdiff1.unwrap_or_default())
-            .extend_raw_buf(8, &self.preimage1.unwrap_or_default())
+            .extend_raw_buf(8, &self.preimage1.unwrap_or_default().as_bytes())
             .extend_optional_raw_buf(64, &self.sig2)
             .extend_big(2, &self.cdiff2.unwrap_or_default())
             .extend_big(2, &self.prev_cdiff2.unwrap_or_default())
-            .extend_raw_buf(8, &self.preimage2.unwrap_or_default());
+            .extend_raw_buf(8, &self.preimage2.unwrap_or_default().as_bytes());
         buff
     }
 }
@@ -524,7 +523,7 @@ impl DoubleSigningProofBytes for DoubleSigningProof {
 /// bytes before appending the bytes of <type>.
 trait ExtendBytes {
     fn extend_raw_buf(&mut self, raw_size: usize, val: &[u8]) -> &mut Self;
-    fn extend_optional_raw_buf(&mut self, raw_size: usize, val: &Option<Vec<u8>>) -> &mut Self;
+    fn extend_optional_raw_buf(&mut self, raw_size: usize, val: &Option<Base64>) -> &mut Self;
     fn extend_raw_big(&mut self, raw_size: usize, val: &U256) -> &mut Self;
     fn extend_u64(&mut self, size_bytes: usize, val: &u64) -> &mut Self;
     fn extend_big(&mut self, size_bytes: usize, val: &U256) -> &mut Self;
@@ -562,10 +561,10 @@ impl ExtendBytes for Vec<u8> {
         self
     }
 
-    fn extend_optional_raw_buf(&mut self, raw_size: usize, val: &Option<Vec<u8>>) -> &mut Self {
+    fn extend_optional_raw_buf(&mut self, raw_size: usize, val: &Option<Base64>) -> &mut Self {
         let mut bytes: Vec<u8> = Vec::new();
         if let Some(val_bytes) = val {
-            bytes.extend_from_slice(&val_bytes[..]);
+            bytes.extend_from_slice(&val_bytes.as_slice());
         }
         self.extend_raw_buf(raw_size, &bytes)
     }

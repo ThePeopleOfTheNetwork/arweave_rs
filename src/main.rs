@@ -4,7 +4,7 @@ use arweave_randomx_rs::*;
 use arweave_rs::validator::hash_index::Initialized;
 use eyre::Result;
 use helpers::consensus::RANDOMX_PACKING_KEY;
-use helpers::DecodeHash;
+use helpers::{DecodeHash, U256};
 use json_types::{ArweaveBlockHeader, NonceLimiterInfo};
 use lazy_static::lazy_static;
 use openssl::hash;
@@ -17,7 +17,6 @@ use validator::hash_index::HashIndex;
 use validator::hash_index_scraper::request_hash_index_jsons;
 use validator::{compute_solution_hash, pre_validate_block};
 use vdf::verify::*;
-use primitive_types::U256;
 
 use crate::validator::hash_index_scraper::current_block_height;
 

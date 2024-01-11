@@ -1,13 +1,11 @@
-use primitive_types::U256;
 use serde::{Deserialize, Deserializer};
 use serde_derive::Deserialize;
 use serde_json::Value;
 
-use crate::helpers::{DecodeHash, hashes::{H256, H384}, Base64};
+use crate::helpers::{DecodeHash, Base64, U256, H256, H384};
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct ArweaveBlockHeader {
-    #[serde(deserialize_with = "string_to_u256")]
     pub merkle_rebase_support_threshold: U256,
     pub chunk_hash: H256,
     pub block_time_history_hash: H256,
@@ -22,29 +20,22 @@ pub struct ArweaveBlockHeader {
     pub poa2: PoaData,
     pub signature: Base64,
     pub reward_key: Base64,
-    #[serde(deserialize_with = "string_to_u256")]
     pub price_per_gib_minute: U256,
-    #[serde(deserialize_with = "string_to_u256")]
     pub scheduled_price_per_gib_minute: U256,
     pub reward_history_hash: H256,
-    #[serde(deserialize_with = "string_to_u256")]
     pub debt_supply: U256,
-    #[serde(deserialize_with = "string_to_u256")]
     pub kryder_plus_rate_multiplier: U256,
-    #[serde(deserialize_with = "string_to_u256")]
     pub kryder_plus_rate_multiplier_latch: U256,
-    #[serde(deserialize_with = "string_to_u256")]
     pub denomination: U256,
     pub redenomination_height: u64,
     pub previous_block: H384,
     pub timestamp: u64,
     pub last_retarget: u64,
-    #[serde(default, deserialize_with = "optional_string_to_u256")]
+    #[serde(default)]
     pub recall_byte2: Option<U256>,
-    #[serde(default, deserialize_with = "decode_to_bytes")]
+    #[serde(default)]
     pub chunk2_hash: Option<H256>,
     pub hash: H256,
-    #[serde(deserialize_with = "string_to_u256")]
     pub diff: U256,
     pub height: u64,
     pub indep_hash: H384,
@@ -64,10 +55,8 @@ pub struct ArweaveBlockHeader {
     pub weave_size: u64,
     #[serde(with = "stringify")]
     pub block_size: u64,
-    #[serde(default, deserialize_with = "string_to_u256")]
     pub cumulative_diff: U256,
     pub double_signing_proof: DoubleSigningProof,
-    #[serde(deserialize_with = "string_to_u256")]
     pub previous_cumulative_diff: U256,
     #[serde(deserialize_with = "parse_usd_to_ar_rate")]
     pub usd_to_ar_rate: [u64; 2],
@@ -91,24 +80,24 @@ pub struct PoaData {
 
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct DoubleSigningProof {
-    #[serde(default, deserialize_with = "optional_base64_string_to_bytes")]
-    pub pub_key: Option<Vec<u8>>,
-    #[serde(default, deserialize_with = "optional_base64_string_to_bytes")]
-    pub sig1: Option<Vec<u8>>,
-    #[serde(default, deserialize_with = "optional_string_to_u256")]
+    #[serde(default)]
+    pub pub_key: Option<Base64>,
+    #[serde(default)]
+    pub sig1: Option<Base64>,
+    #[serde(default)]
     pub cdiff1: Option<U256>,
-    #[serde(default, deserialize_with = "optional_string_to_u256")]
+    #[serde(default)]
     pub prev_cdiff1: Option<U256>,
-    #[serde(default, deserialize_with = "optional_decode_to_bytes")]
-    pub preimage1: Option<[u8; 32]>,
-    #[serde(default, deserialize_with = "optional_base64_string_to_bytes")]
-    pub sig2: Option<Vec<u8>>,
-    #[serde(default, deserialize_with = "optional_string_to_u256")]
+    #[serde(default)]
+    pub preimage1: Option<H256>,
+    #[serde(default)]
+    pub sig2: Option<Base64>,
+    #[serde(default)]
     pub cdiff2: Option<U256>,
-    #[serde(default, deserialize_with = "optional_string_to_u256")]
+    #[serde(default)]
     pub prev_cdiff2: Option<U256>,
-    #[serde(default, deserialize_with = "optional_decode_to_bytes")]
-    pub preimage2: Option<[u8; 32]>,
+    #[serde(default)]
+    pub preimage2: Option<H256>,
 }
 
 /// NonceLImiterInput holds the nonce_limiter_info from the Arweave block header
@@ -125,9 +114,9 @@ pub struct NonceLimiterInfo {
     pub last_step_checkpoints: Vec<H256>,
     #[serde(deserialize_with = "parse_array_of_hashes_to_bytes")]
     pub checkpoints: Vec<H256>,
-    #[serde(default, deserialize_with = "parse_optional_string_to_u64")]
+    #[serde(default, deserialize_with = "optional_string_to_u64")]
     pub vdf_difficulty: Option<u64>,
-    #[serde(default, deserialize_with = "parse_optional_string_to_u64")]
+    #[serde(default, deserialize_with = "optional_string_to_u64")]
     pub next_vdf_difficulty: Option<u64>,
 }
 
@@ -154,10 +143,9 @@ pub mod stringify {
         format!("{}", value).serialize(serializer)
     }
 }
-// -------
 
 /// serde helper method to convert an optional JSON `string` value to a `usize`
-fn parse_optional_string_to_u64<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
+fn optional_string_to_u64<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -168,13 +156,6 @@ where
         Some(_) => Err(serde::de::Error::custom("Invalid type")),
         None => Ok(None),
     }
-}
-fn string_to_u256<'de, D>(deserializer: D) -> Result<U256, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: String = Deserialize::deserialize(deserializer)?;
-    U256::from_dec_str(&s).map_err(serde::de::Error::custom)
 }
 
 pub fn decode_to_bytes<'de, D, T>(deserializer: D) -> Result<T, D::Error>
@@ -218,22 +199,6 @@ where
             .map(Some)
             .map_err(serde::de::Error::custom),
         Some(_) => Err(serde::de::Error::custom("Invalid type")),
-        None => Ok(None),
-    }
-}
-
-fn optional_string_to_u256<'de, D>(deserializer: D) -> Result<Option<U256>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let opt_val: Option<Value> =
-        Option::deserialize(deserializer).map_err(serde::de::Error::custom)?;
-
-    match opt_val {
-        Some(Value::String(s)) => U256::from_dec_str(&s)
-            .map(Some)
-            .map_err(serde::de::Error::custom),
-        Some(_) => Err(serde::de::Error::custom("Invalid U256 type")),
         None => Ok(None),
     }
 }

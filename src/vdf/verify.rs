@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 use rayon::prelude::*;
 use openssl::sha;
-use primitive_types::U256;
-use crate::{json_types::NonceLimiterInfo, helpers::{consensus::*, hashes::{H256, H384}}};
+use crate::{json_types::NonceLimiterInfo, helpers::{consensus::*, H384, H256, U256}};
 
 // erlang consensus constants
 // ================================================
