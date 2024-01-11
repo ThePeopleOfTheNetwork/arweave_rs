@@ -3,14 +3,14 @@ use std::fs::{File, OpenOptions, self};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
-use crate::helpers::DecodeHash;
+use crate::arweave_types::{decode_hash::*, H384, H256};
 
 use super::hash_index_scraper::{current_block_height_async, request_indexes, HashIndexJson};
 
 pub struct HashIndexItem {
-    pub block_hash: [u8; 48], // 48 bytes
-    pub weave_size: u128,     // 16 bytes
-    pub tx_root: [u8; 32],    // 32 bytes
+    pub block_hash: H384, // 48 bytes
+    pub weave_size: u128, // 16 bytes
+    pub tx_root: H256,    // 32 bytes
                               // TODO: add height
                               // height: u128 (ar_block_index.erl: 111)
                               // Oh yeah, height is implicit in the indexing of the items
@@ -21,19 +21,19 @@ pub struct BlockBounds {
     pub height: u128,
     pub block_start_offset: u128,
     pub block_end_offset: u128,
-    pub tx_root: [u8; 32],
+    pub tx_root: H256,
 }
 
 impl HashIndexItem {
     pub fn from(json: &HashIndexJson) -> Result<Self> {
-        let block_hash: [u8; 48] = DecodeHash::from(&json.hash)
+        let block_hash: H384 = DecodeHash::from(&json.hash)
             .map_err(|e| eyre!("Failed to decode block_hash: {}", e))?;
         let weave_size = json
             .weave_size
             .parse()
             .map_err(|e| eyre!("Failed to parse weave_size: {}", e))?;
 
-        let mut tx_root = [0u8; 32];
+        let mut tx_root = H256::empty();
         if !json.tx_root.is_empty() {
             tx_root = DecodeHash::from(&json.tx_root)
                 .map_err(|e| eyre!("Failed to decode tx_root: {}", e))?;
@@ -203,21 +203,21 @@ impl HashIndexItem {
     // Serialize the HashIndexItem to bytes
     fn to_bytes(&self) -> [u8; 48 + 16 + 32] {
         let mut bytes = [0u8; 48 + 16 + 32];
-        bytes[0..48].copy_from_slice(&self.block_hash);
+        bytes[0..48].copy_from_slice(&self.block_hash.as_bytes());
         bytes[48..64].copy_from_slice(&self.weave_size.to_le_bytes());
-        bytes[64..96].copy_from_slice(&self.tx_root);
+        bytes[64..96].copy_from_slice(&self.tx_root.as_bytes());
         bytes
     }
 
     // Deserialize bytes to HashIndexItem
     fn from_bytes(bytes: &[u8]) -> HashIndexItem {
-        let mut block_hash = [0u8; 48];
+        let mut block_hash = H384::empty();
         let mut weave_size_bytes = [0u8; 16];
-        let mut tx_root = [0u8; 32];
+        let mut tx_root = H256::empty();
 
-        block_hash.copy_from_slice(&bytes[0..48]);
+        block_hash.0.copy_from_slice(&bytes[0..48]);
         weave_size_bytes.copy_from_slice(&bytes[48..64]);
-        tx_root.copy_from_slice(&bytes[64..96]);
+        tx_root.0.copy_from_slice(&bytes[64..96]);
 
         HashIndexItem {
             block_hash,

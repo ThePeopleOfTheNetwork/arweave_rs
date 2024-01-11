@@ -4,7 +4,7 @@ use color_eyre::eyre::eyre;
 use eyre::Error;
 use openssl::sha;
 
-use crate::helpers::Base64;
+use crate::arweave_types::Base64;
 
 /// Single struct used for original data chunks (Leaves) and branch nodes (hashes of pairs of child nodes).
 #[derive(Debug, PartialEq, Clone)]

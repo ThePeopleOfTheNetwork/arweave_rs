@@ -2,9 +2,7 @@
 use arweave_randomx_rs::*;
 use openssl::sha;
  
-use crate::json_types::ArweaveBlockHeader;
-
-use super::{U256, H256, H384};
+use crate::arweave_types::*;
 
 //The key to initialize the RandomX state from, for RandomX packing.
 pub const RANDOMX_PACKING_KEY: &[u8] = b"default arweave 2.5 pack key";

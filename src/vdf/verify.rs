@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use rayon::prelude::*;
 use openssl::sha;
-use crate::{json_types::NonceLimiterInfo, helpers::{consensus::*, H384, H256, U256}};
+use crate::{consensus::*, arweave_types::{NonceLimiterInfo, H256, H384, U256}};
 
 // erlang consensus constants
 // ================================================
@@ -217,7 +217,11 @@ pub fn checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
     // Make a read only copy for parallel iterating
     let steps = step_hashes.clone();
     let steps_since_reset = get_vdf_steps_since_reset(nonce_info.global_step_number);
-    let reset_index = steps.len() - steps_since_reset - 2; // -2 here because we need the step before the reset (-1), and -1 because we added a hash to steps;
+     // -2 here because we need the step before the reset (-1), and -1 because 
+     // we pushed previous_seed to step_hashes making it one longer.
+     // We use i64 intentionally because the steps_since_reset may be larger
+     // than steps.len() and a negative reset_index will not match any of our steps
+    let reset_index:i64 = steps.len() as i64 - steps_since_reset as i64 - 2;
 
     // Calculate the step number of the first step in the blocks sequence
     let start_step_number = nonce_info.global_step_number as usize - nonce_info.checkpoints.len();
@@ -230,7 +234,7 @@ pub fn checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
         .map(|i| {
             let salt: U256 = (step_number_to_salt_number(start_step_number + i)).into();
             let mut seed = steps[i];
-            if i == reset_index {
+            if i as i64 == reset_index {
                 seed = apply_reset_seed(seed, reset_seed);
             }
             let checkpoints = vdf_sha2(salt, seed, NUM_CHECKPOINTS_IN_VDF_STEP, num_iterations);

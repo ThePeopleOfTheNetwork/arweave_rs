@@ -8,6 +8,10 @@ edition = "2021"
 name = "arweave_rs"
 path = "src/lib.rs"
 
+#[[bin]]
+#name = "hello"
+#path = "src/main.rs"
+
 [dependencies]
 eyre = "0.6.8"
 color-eyre = "0.6.2"

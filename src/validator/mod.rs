@@ -1,10 +1,9 @@
 #![allow(dead_code)]
 use self::hash_index::{HashIndex, Initialized};
 use crate::{
-    helpers::{consensus::*, Base64, H256, U256, H384},
-    json_types::{ArweaveBlockHeader, DoubleSigningProof, PoaData},
+    arweave_types::{H256,H384, ArweaveBlockHeader, PoaData, Base64, U256, DoubleSigningProof},
     packing::{feistel::feistel_decrypt, pack::compute_entropy},
-    validator::merkle::validate_path,
+    validator::merkle::validate_path, consensus::*,
 };
 use arweave_randomx_rs::RandomXVM;
 use color_eyre::eyre::{eyre, Result};
@@ -423,7 +422,7 @@ fn poa_is_valid(
     // TX_PATH Validation
     // --------------------------------------------------------------
     let tx_path_result = match validate_path(
-        block_bounds.tx_root,
+        block_bounds.tx_root.0,
         &poa_data.tx_path,
         byte_offset_in_block,
     ) {
@@ -530,7 +529,7 @@ trait ExtendBytes {
     fn extend_optional_big(&mut self, size_bytes: usize, val: &Option<U256>) -> &mut Self;
     fn extend_optional_hash(&mut self, size_bytes: usize, val: &Option<H256>) -> &mut Self;
     fn extend_buf(&mut self, size_bytes: usize, val: &[u8]) -> &mut Self;
-    fn extend_buf_list(&mut self, size_bytes: usize, val: &[Vec<u8>]) -> &mut Self;
+    fn extend_buf_list(&mut self, size_bytes: usize, val: &[Base64]) -> &mut Self;
     fn extend_hash_list(&mut self, val: &[H256]) -> &mut Self;
     fn trim_leading_zero_bytes(slice: &[u8]) -> &[u8] {
         let mut non_zero_index = slice.iter().position(|&x| x != 0).unwrap_or(slice.len());
@@ -625,13 +624,13 @@ impl ExtendBytes for Vec<u8> {
         self.extend_buf(size_bytes, &bytes)
     }
 
-    fn extend_buf_list(&mut self, size_bytes: usize, data: &[Vec<u8>]) -> &mut Self {
+    fn extend_buf_list(&mut self, size_bytes: usize, data: &[Base64]) -> &mut Self {
         // Number of elements in the list, as 2 bytes
         let num_elements = data.len() as u16;
         self.extend_from_slice(&num_elements.to_be_bytes());
         // Iterate over each element in the data vector
         for elem in data.iter().rev() {
-            self.extend_buf(size_bytes, elem);
+            self.extend_buf(size_bytes, elem.as_slice());
         }
         self
     }
@@ -680,8 +679,8 @@ fn block_hash_is_valid(block_header: &ArweaveBlockHeader) -> bool {
         .extend_u64(1, &b.usd_to_ar_rate[1])
         .extend_u64(1, &b.scheduled_usd_to_ar_rate[0])
         .extend_u64(1, &b.scheduled_usd_to_ar_rate[1])
-        .extend_buf_list(2, &b.tags)
-        .extend_buf_list(1, &b.txs)
+        .extend_buf_list(2, &b.tags.0)
+        .extend_buf_list(1, &b.txs.0)
         .extend_u64(1, &b.reward)
         .extend_u64(2, &b.recall_byte)
         .extend_buf(1, &b.hash_preimage.as_bytes())

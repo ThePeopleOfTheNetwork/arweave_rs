@@ -5,7 +5,7 @@ use reqwest::{header, Client as ReqwestClient, StatusCode};
 use serde_derive::{Deserialize, Serialize};
 use std::time::Duration;
 
-use crate::json_types::ArweaveBlockHeader;
+use crate::arweave_types::ArweaveBlockHeader;
 
 // {
 //   "tx_root" : "FDQNxgnKyW3ugAPJNipcA8jIplL0Jw8yD7j1dm3iViI",
