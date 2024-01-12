@@ -39,7 +39,7 @@ pub struct ArweaveBlockHeader {
     pub last_retarget: u64,
     #[serde(default)]
     pub recall_byte2: Option<U256>,
-    #[serde(default, with = "serde_option_encode_hash")]
+    #[serde(default, with = "optional_hash")]
     pub chunk2_hash: Option<H256>,
     pub hash: H256,
     pub diff: U256,
@@ -48,7 +48,7 @@ pub struct ArweaveBlockHeader {
     pub txs: Base64List,
     pub tags: Base64List,
     pub nonce: Nonce,
-    #[serde(default, with = "serde_option_encode_hash")]
+    #[serde(default, with = "optional_hash")]
     pub tx_root: Option<H256>,
     pub wallet_list: H384,
     pub reward_addr: H256,
@@ -182,7 +182,7 @@ mod option_u64_stringify {
 //==============================================================================
 // Optional<*Hash*> Type, support H256 and H384
 //------------------------------------------------------------------------------
-mod serde_option_encode_hash {
+mod optional_hash {
     use serde::{self, Deserialize, Deserializer, Serializer};
 
     use super::{decode::DecodeHash, H256};
