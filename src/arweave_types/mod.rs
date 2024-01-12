@@ -59,10 +59,8 @@ pub struct ArweaveBlockHeader {
     pub cumulative_diff: U256,
     pub double_signing_proof: DoubleSigningProof,
     pub previous_cumulative_diff: U256,
-    #[serde(deserialize_with = "parse_usd_to_ar_rate")]
-    pub usd_to_ar_rate: [u64; 2],
-    #[serde(deserialize_with = "parse_usd_to_ar_rate")]
-    pub scheduled_usd_to_ar_rate: [u64; 2],
+    pub usd_to_ar_rate: USDToARRate,
+    pub scheduled_usd_to_ar_rate: USDToARRate,
     #[serde(with = "stringify")]
     pub packing_2_5_threshold: u64,
     #[serde(with = "stringify")]
@@ -222,8 +220,8 @@ mod serde_option_encode_hash {
 pub struct Nonce(pub u64);
 
 /// The nonce field in the ArweaveBlockHeader is unique. Arweave Nonces can
-/// range from 0-(RECALL_RANGE_SIZE/DATA_CHUNK_SIZE). Today this is a value 
-/// is between 0-400. Two bytes can store values between 0-511. This is enough 
+/// range from 0-(RECALL_RANGE_SIZE/DATA_CHUNK_SIZE). Today this is a value
+/// is between 0-400. Two bytes can store values between 0-511. This is enough
 /// to store the  nonce range, when encoded to base64_url this encodes to a
 /// string of 1-3 bytes of base64_url_encoded data in the JSON.
 impl Nonce {
@@ -282,29 +280,57 @@ fn vec_to_u64_be(bytes: &Vec<u8>) -> Result<u64, &'static str> {
 // USD to AR rate
 //------------------------------------------------------------------------------
 
-fn parse_usd_to_ar_rate<'de, D>(deserializer: D) -> Result<[u64; 2], D::Error>
-where
-    D: Deserializer<'de>,
-{
-    // Deserialize `usd_to_ar_rate` as a vector of strings.
-    let vec: Vec<String> = Deserialize::deserialize(deserializer)?;
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct USDToARRate(pub [u64; 2]);
 
-    // Try to convert the vector of strings to a vector of `u64`.
-    let mut numbers = vec.iter().map(|s| s.parse::<u64>());
+impl Index<usize> for USDToARRate {
+    type Output = u64;
 
-    // Extract two numbers from the iterator to create an array.
-    let n1 = numbers
-        .next()
-        .ok_or_else(|| serde::de::Error::custom("Invalid first number"))?
-        .unwrap();
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
+    }
+}
 
-    let n2 = numbers
-        .next()
-        .ok_or_else(|| serde::de::Error::custom("Invalid second number"))?
-        .unwrap();
+/// Implement Serialize for USDToARRate
+impl Serialize for USDToARRate {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Convert the u64 numbers in the array to strings
+        let as_strings = vec![self.0[0].to_string(), self.0[1].to_string()];
 
-    // Return the array of numbers, or an error if parsing failed.
-    Ok([n1, n2])
+        // Serialize the vector of strings
+        as_strings.serialize(serializer)
+    }
+}
+
+/// Implement Deserialize for USDToARRate
+impl<'de> Deserialize<'de> for USDToARRate {
+    fn deserialize<D>(deserializer: D) -> Result<USDToARRate, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Deserialize `usd_to_ar_rate` json value as a vector of strings.
+        let vec: Vec<String> = Deserialize::deserialize(deserializer)?;
+
+        // Try to convert the vector of strings to a vector of `u64`.
+        let mut numbers = vec.iter().map(|s| s.parse::<u64>());
+
+        // Extract two numbers from the iterator to create an array.
+        let n1 = numbers
+            .next()
+            .ok_or_else(|| serde::de::Error::custom("Invalid first number"))?
+            .unwrap();
+
+        let n2 = numbers
+            .next()
+            .ok_or_else(|| serde::de::Error::custom("Invalid second number"))?
+            .unwrap();
+
+        // Return the array of numbers, or an error if parsing failed.
+        Ok(USDToARRate([n1, n2]))
+    }
 }
 
 //==============================================================================
