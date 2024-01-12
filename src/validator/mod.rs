@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use self::hash_index::{HashIndex, Initialized};
+use self::block_index::{BlockIndex, Initialized};
 use crate::{
     arweave_types::{H256,H384, ArweaveBlockHeader, PoaData, Base64, U256, DoubleSigningProof},
     packing::{feistel::feistel_decrypt, pack::compute_entropy},
@@ -9,14 +9,14 @@ use arweave_randomx_rs::RandomXVM;
 use color_eyre::eyre::{eyre, Result};
 use openssl::sha;
 
-pub mod hash_index;
-pub mod hash_index_scraper;
+pub mod block_index;
+pub mod block_index_scraper;
 pub mod merkle;
 
 pub fn pre_validate_block(
     block_header: &ArweaveBlockHeader,
     previous_block_header: &ArweaveBlockHeader,
-    hash_index: &HashIndex<Initialized>,
+    block_index: &BlockIndex<Initialized>,
     randomx_vm: Option<&RandomXVM>,
 ) -> Result<[u8; 32]> {
     // =========================================================================
@@ -131,7 +131,7 @@ pub fn pre_validate_block(
     if !poa_is_valid(
         &block_header.poa,
         recall_byte_1,
-        hash_index,
+        block_index,
         &block_header.reward_addr,
         randomx_vm,
     ) {
@@ -143,7 +143,7 @@ pub fn pre_validate_block(
         if !poa_is_valid(
             &block_header.poa2,
             recall_byte_2,
-            hash_index,
+            block_index,
             &block_header.reward_addr,
             randomx_vm,
         ) {
@@ -392,12 +392,12 @@ fn recall_bytes_is_valid(
 fn poa_is_valid(
     poa_data: &PoaData,
     recall_byte: U256,
-    hash_index: &HashIndex<Initialized>,
+    block_index: &BlockIndex<Initialized>,
     reward_addr: &H256,
     randomx_vm: Option<&RandomXVM>,
 ) -> bool {
-    // Use the hash_index to look up the BlockStart, BlockEnd, and tx_root
-    let block_bounds = hash_index.get_block_bounds(recall_byte.as_u128());
+    // Use the block_index to look up the BlockStart, BlockEnd, and tx_root
+    let block_bounds = block_index.get_block_bounds(recall_byte.as_u128());
     let start = block_bounds.block_start_offset;
     let end = block_bounds.block_end_offset;
 

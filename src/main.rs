@@ -5,8 +5,8 @@ use arweave_types::{*,decode::DecodeHash};
 use consensus::RANDOMX_PACKING_KEY;
 use std::{fs::File, io::Read, time::Instant};
 use validator::{
-    compute_solution_hash, hash_index::HashIndex, hash_index::Initialized,
-    hash_index_scraper::current_block_height, hash_index_scraper::request_hash_index_jsons,
+    compute_solution_hash, block_index::BlockIndex, block_index::Initialized,
+    block_index_scraper::current_block_height, block_index_scraper::request_block_index_jsons,
     pre_validate_block,
 };
 use vdf::verify::*;
@@ -24,7 +24,7 @@ mod vdf;
 
 //#[derive(Default, Clone)]
 struct TestContext {
-    pub hash_index:HashIndex<Initialized>,
+    pub block_index:BlockIndex<Initialized>,
     pub base_case: Vec<NonceLimiterInfo>,
     pub reset_case: Vec<NonceLimiterInfo>,
     pub reset_first_case: Vec<NonceLimiterInfo>,
@@ -96,13 +96,13 @@ lazy_static! {
         let bad_tx_path_case = parse_block_header_from_file("data/blocks/1338549.json");
         let bad_tx_path_case_prev = parse_block_header_from_file("data/blocks/1338548.json");
 
-        let hash_index: HashIndex = HashIndex::new();
+        let block_index: BlockIndex = BlockIndex::new();
         let runtime = tokio::runtime::Runtime::new().unwrap();
-        let hash_index = runtime.block_on(hash_index.init()).unwrap();
+        let block_index = runtime.block_on(block_index.init()).unwrap();
 
 
         let tc:TestContext = TestContext {
-            hash_index,
+            block_index,
             base_case: vec![base1, base2],
             reset_case: vec![reset1, reset2],
             reset_first_case: vec![reset_first1],
@@ -337,16 +337,12 @@ fn test_randomx_hash_with_entropy() -> bool {
 fn test_pre_validation() -> bool {
     let (block_header, previous_block_header) = &TEST_DATA.poa_failed_case;
 
-    let hash_index: HashIndex = HashIndex::new();
-    let runtime = tokio::runtime::Runtime::new().unwrap();
-    let hash_index = runtime.block_on(hash_index.init()).unwrap();
-
     let randomx_vm = create_randomx_vm(RandomXMode::FastInitialization, RANDOMX_PACKING_KEY);
 
     let solution_hash = pre_validate_block(
         block_header,
         previous_block_header,
-        &hash_index,
+        &TEST_DATA.block_index,
         Some(&randomx_vm),
     )
     .unwrap();
@@ -361,13 +357,13 @@ fn test_pre_validation() -> bool {
 fn test_validator_init() -> bool {
     // let block_height = get_current_block_height();
     // println!("{block_height:?}");
-    let hash_index: HashIndex = HashIndex::new();
+    let block_index: BlockIndex = BlockIndex::new();
 
     //let client = reqwest::Client::new();
     let runtime = tokio::runtime::Runtime::new().unwrap();
-    let hash_index = runtime.block_on(hash_index.init()).unwrap();
+    let block_index = runtime.block_on(block_index.init()).unwrap();
 
-    println!("len: {}", hash_index.num_indexes());
+    println!("len: {}", block_index.num_indexes());
     true
 }
 
@@ -375,7 +371,7 @@ fn test_validator_index_jsons() -> bool {
     let client = reqwest::Client::new();
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let result = runtime
-        .block_on(request_hash_index_jsons(
+        .block_on(request_block_index_jsons(
             "http://188.166.200.45:1984",
             1288400u64,
             1288509u64,

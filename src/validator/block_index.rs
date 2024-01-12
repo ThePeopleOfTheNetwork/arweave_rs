@@ -5,7 +5,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::arweave_types::{decode::*, H384, H256};
-use super::hash_index_scraper::{current_block_height_async, request_indexes, HashIndexJson};
+use super::block_index_scraper::{current_block_height_async, request_indexes, BlockIndexJson};
 
 const HASH_INDEX_ITEM_SIZE: u64 = 48 + 16 + 32;
 const FILE_PATH: &str = "data/index.dat";
@@ -15,9 +15,9 @@ pub struct Uninitialized;
 pub struct Initialized;
 
 /// Use a Type State pattern for HashIndex with two states, Uninitialized and Initialized
-impl HashIndex {
+impl BlockIndex {
     pub fn new() -> Self {
-        HashIndex {
+        BlockIndex {
             indexes: Arc::new([]),
             state: Uninitialized,
         }
@@ -28,20 +28,20 @@ impl HashIndex {
 // Uninitialized State
 //------------------------------------------------------------------------------
 
-pub struct HashIndex<State = Uninitialized> {
+pub struct BlockIndex<State = Uninitialized> {
     #[allow(dead_code)]
     state: State,
-    indexes: Arc<[HashIndexItem]>,
+    indexes: Arc<[BlockIndexItem]>,
 }
 
-impl Default for HashIndex<Uninitialized> {
+impl Default for BlockIndex<Uninitialized> {
     fn default() -> Self {
-        HashIndex::new()
+        BlockIndex::new()
     }
 }
 
-impl HashIndex<Uninitialized> {
-    pub async fn init(mut self) -> Result<HashIndex<Initialized>> {
+impl BlockIndex<Uninitialized> {
+    pub async fn init(mut self) -> Result<BlockIndex<Initialized>> {
         // Get the current block height from the network
         let current_block_height: u64 = current_block_height_async().await;
 
@@ -64,7 +64,7 @@ impl HashIndex<Uninitialized> {
         // EARLY OUT: if the index is already current
         if latest_height >= current_block_height - 20 {
             // Return the "Initialized" state of the HashIndex type
-            return Ok(HashIndex {
+            return Ok(BlockIndex {
                 indexes: self.indexes,
                 state: Initialized,
             });
@@ -96,14 +96,14 @@ impl HashIndex<Uninitialized> {
         let index_jsons =
             request_indexes("http://188.166.200.45:1984", &start_block_heights).await?;
 
-        // Once the batches have completed, write them  to the hash_index
+        // Once the batches have completed, write them  to the block_index
         // transforming the JSONS to bytes so they take up less space on disk
         // and in memory.
         let index_items = index_jsons
             .iter()
             .flatten()
-            .map(HashIndexItem::from)
-            .collect::<Result<Vec<HashIndexItem>>>()
+            .map(BlockIndexItem::from)
+            .collect::<Result<Vec<BlockIndexItem>>>()
             .unwrap();
 
         // Write the updates to the index and to disk
@@ -115,7 +115,7 @@ impl HashIndex<Uninitialized> {
         self.indexes = vec.into();
 
         // Return the "Initialized" state of the HashIndex type
-        Ok(HashIndex {
+        Ok(BlockIndex {
             indexes: self.indexes,
             state: Initialized,
         })
@@ -126,19 +126,19 @@ impl HashIndex<Uninitialized> {
 // Initialized State
 //------------------------------------------------------------------------------
 
-impl HashIndex<Initialized> {
+impl BlockIndex<Initialized> {
     pub fn num_indexes(&self) -> u64 {
         self.indexes.len() as u64
     }
 
-    pub fn get_item(&self, index: usize) -> Option<&HashIndexItem> {
+    pub fn get_item(&self, index: usize) -> Option<&BlockIndexItem> {
         self.indexes.get(index)
     }
 
     pub fn get_block_bounds(&self, recall_byte: u128) -> BlockBounds {
         let mut block_bounds: BlockBounds = Default::default();
 
-        let result = self.get_hash_index_item(recall_byte);
+        let result = self.get_block_index_item(recall_byte);
         if let Ok((index, found_item)) = result {
             let previous_item = self.get_item(index - 1).unwrap();
             block_bounds.block_start_offset = previous_item.weave_size;
@@ -149,7 +149,7 @@ impl HashIndex<Initialized> {
         block_bounds
     }
 
-    fn get_hash_index_item(&self, recall_byte: u128) -> Result<(usize, &HashIndexItem)> {
+    fn get_block_index_item(&self, recall_byte: u128) -> Result<(usize, &BlockIndexItem)> {
         let result = self.indexes.binary_search_by(|item| {
             if recall_byte < item.weave_size {
                 std::cmp::Ordering::Greater
@@ -171,7 +171,7 @@ impl HashIndex<Initialized> {
 }
 
 #[derive(Clone, Default)]
-pub struct HashIndexItem {
+pub struct BlockIndexItem {
     pub block_hash: H384, // 48 bytes
     pub weave_size: u128, // 16 bytes
     pub tx_root: H256,    // 32 bytes
@@ -188,8 +188,8 @@ pub struct BlockBounds {
     pub tx_root: H256,
 }
 
-impl HashIndexItem {
-    pub fn from(json: &HashIndexJson) -> Result<Self> {
+impl BlockIndexItem {
+    pub fn from(json: &BlockIndexJson) -> Result<Self> {
         let block_hash: H384 = DecodeHash::from(&json.hash)
             .map_err(|e| eyre!("Failed to decode block_hash: {}", e))?;
         let weave_size = json
@@ -211,7 +211,7 @@ impl HashIndexItem {
     }
 }
 
-impl HashIndexItem {
+impl BlockIndexItem {
     // Serialize the HashIndexItem to bytes
     fn to_bytes(&self) -> [u8; 48 + 16 + 32] {
         let mut bytes = [0u8; 48 + 16 + 32];
@@ -222,7 +222,7 @@ impl HashIndexItem {
     }
 
     // Deserialize bytes to HashIndexItem
-    fn from_bytes(bytes: &[u8]) -> HashIndexItem {
+    fn from_bytes(bytes: &[u8]) -> BlockIndexItem {
         let mut block_hash = H384::empty();
         let mut weave_size_bytes = [0u8; 16];
         let mut tx_root = H256::empty();
@@ -231,7 +231,7 @@ impl HashIndexItem {
         weave_size_bytes.copy_from_slice(&bytes[48..64]);
         tx_root.0.copy_from_slice(&bytes[64..96]);
 
-        HashIndexItem {
+        BlockIndexItem {
             block_hash,
             weave_size: u128::from_le_bytes(weave_size_bytes),
             tx_root,
@@ -239,7 +239,7 @@ impl HashIndexItem {
     }
 }
 
-fn save_initial_index(hash_items: &[HashIndexItem]) -> io::Result<()> {
+fn save_initial_index(hash_items: &[BlockIndexItem]) -> io::Result<()> {
     let mut file = File::create(FILE_PATH)?;
     for item in hash_items {
         let bytes = item.to_bytes();
@@ -248,21 +248,21 @@ fn save_initial_index(hash_items: &[HashIndexItem]) -> io::Result<()> {
     Ok(())
 }
 
-fn read_item_at(block_height: u64) -> io::Result<HashIndexItem> {
+fn read_item_at(block_height: u64) -> io::Result<BlockIndexItem> {
     let mut file = File::open(FILE_PATH)?;
     let mut buffer = [0; HASH_INDEX_ITEM_SIZE as usize];
     file.seek(SeekFrom::Start(block_height * HASH_INDEX_ITEM_SIZE))?;
     file.read_exact(&mut buffer)?;
-    Ok(HashIndexItem::from_bytes(&buffer))
+    Ok(BlockIndexItem::from_bytes(&buffer))
 }
 
-fn append_item(item: HashIndexItem) -> io::Result<()> {
+fn append_item(item: BlockIndexItem) -> io::Result<()> {
     let mut file = OpenOptions::new().append(true).open(FILE_PATH)?;
     file.write_all(&item.to_bytes())?;
     Ok(())
 }
 
-fn append_items(items: &Vec<HashIndexItem>) -> io::Result<()> {
+fn append_items(items: &Vec<BlockIndexItem>) -> io::Result<()> {
     let mut file = OpenOptions::new().append(true).open(FILE_PATH)?;
 
     for item in items {
@@ -272,14 +272,14 @@ fn append_items(items: &Vec<HashIndexItem>) -> io::Result<()> {
     Ok(())
 }
 
-fn update_item_at(block_height: u64, item: HashIndexItem) -> io::Result<()> {
+fn update_item_at(block_height: u64, item: BlockIndexItem) -> io::Result<()> {
     let mut file = OpenOptions::new().read(true).write(true).open(FILE_PATH)?;
     file.seek(SeekFrom::Start(block_height * HASH_INDEX_ITEM_SIZE))?;
     file.write_all(&item.to_bytes())?;
     Ok(())
 }
 
-fn load_index_from_file() -> io::Result<Vec<HashIndexItem>> {
+fn load_index_from_file() -> io::Result<Vec<BlockIndexItem>> {
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -295,13 +295,13 @@ fn load_index_from_file() -> io::Result<Vec<HashIndexItem>> {
     file.read_exact(&mut buffer)?;
 
     // Initialize a vector to hold the HashIndexItems
-    let mut hash_index_items = Vec::new();
+    let mut block_index_items = Vec::new();
 
     // Chunk the buffer and deserialize each chunk
     for chunk in buffer.chunks(HASH_INDEX_ITEM_SIZE as usize) {
-        let item = HashIndexItem::from_bytes(chunk);
-        hash_index_items.push(item);
+        let item = BlockIndexItem::from_bytes(chunk);
+        block_index_items.push(item);
     }
 
-    Ok(hash_index_items)
+    Ok(block_index_items)
 }

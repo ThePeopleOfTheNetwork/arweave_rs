@@ -14,7 +14,7 @@ use crate::arweave_types::ArweaveBlockHeader;
 // }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
-pub struct HashIndexJson {
+pub struct BlockIndexJson {
     pub tx_root: String,
     pub weave_size: String,
     pub hash: String,
@@ -23,12 +23,12 @@ pub struct HashIndexJson {
 pub async fn request_indexes(
     node_url: &str,
     start_block_heights: &[(u64, u64)],
-) -> Result<Vec<Vec<HashIndexJson>>> {
+) -> Result<Vec<Vec<BlockIndexJson>>> {
     let client = ReqwestClient::new();
     let requests = start_block_heights.iter().map(|bh| {
         let (start_block_height, num_indexes) = bh;
         let end_block_height = start_block_height + num_indexes;
-        request_hash_index_jsons(node_url, *start_block_height, end_block_height, &client)
+        request_block_index_jsons(node_url, *start_block_height, end_block_height, &client)
     });
 
     // Concurrently execute the requests
@@ -39,18 +39,18 @@ pub async fn request_indexes(
     }
 }
 
-pub async fn request_hash_index_jsons(
+pub async fn request_block_index_jsons(
     node_url: &str,
     start_block_height: u64,
     end_block_height: u64,
     client: &ReqwestClient,
-) -> Result<Vec<HashIndexJson>> {
+) -> Result<Vec<BlockIndexJson>> {
     let url = format!("{node_url}/block_index/{start_block_height}/{end_block_height}");
     let max_retries = 3;
     let mut retry_count = 0;
     let mut last_error: Option<Report>;
 
-    let result: Result<Vec<HashIndexJson>> = loop {
+    let result: Result<Vec<BlockIndexJson>> = loop {
         // Make the async HTTP request and await the response
         // include the x-block-format header so we'll get weaveSize and tx_root
         // in our response.
@@ -64,7 +64,7 @@ pub async fn request_hash_index_jsons(
             Ok(res) => {
                 if res.status() == StatusCode::OK {
                     let parsed = res
-                        .json::<Vec<HashIndexJson>>()
+                        .json::<Vec<BlockIndexJson>>()
                         .await
                         .expect("JSON should be parsable to [HashIndexJson]");
                     break Ok(parsed);
