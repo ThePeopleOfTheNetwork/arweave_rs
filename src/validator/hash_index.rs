@@ -2,76 +2,41 @@ use color_eyre::eyre::{eyre, Result};
 use std::fs::{File, OpenOptions, self};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::arweave_types::{decode::*, H384, H256};
-
 use super::hash_index_scraper::{current_block_height_async, request_indexes, HashIndexJson};
-
-pub struct HashIndexItem {
-    pub block_hash: H384, // 48 bytes
-    pub weave_size: u128, // 16 bytes
-    pub tx_root: H256,    // 32 bytes
-                              // TODO: add height
-                              // height: u128 (ar_block_index.erl: 111)
-                              // Oh yeah, height is implicit in the indexing of the items
-}
-
-#[derive(Default, Clone, Debug)]
-pub struct BlockBounds {
-    pub height: u128,
-    pub block_start_offset: u128,
-    pub block_end_offset: u128,
-    pub tx_root: H256,
-}
-
-impl HashIndexItem {
-    pub fn from(json: &HashIndexJson) -> Result<Self> {
-        let block_hash: H384 = DecodeHash::from(&json.hash)
-            .map_err(|e| eyre!("Failed to decode block_hash: {}", e))?;
-        let weave_size = json
-            .weave_size
-            .parse()
-            .map_err(|e| eyre!("Failed to parse weave_size: {}", e))?;
-
-        let mut tx_root = H256::empty();
-        if !json.tx_root.is_empty() {
-            tx_root = DecodeHash::from(&json.tx_root)
-                .map_err(|e| eyre!("Failed to decode tx_root: {}", e))?;
-        }
-
-        Ok(Self {
-            tx_root,
-            block_hash,
-            weave_size,
-        })
-    }
-}
 
 const HASH_INDEX_ITEM_SIZE: u64 = 48 + 16 + 32;
 const FILE_PATH: &str = "data/index.dat";
 
+// Allowable states for the index
 pub struct Uninitialized;
 pub struct Initialized;
-
-pub struct HashIndex<State = Uninitialized> {
-    #[allow(dead_code)]
-    state: State,
-    indexes: Vec<HashIndexItem>,
-}
-
-impl Default for HashIndex<Uninitialized> {
-    fn default() -> Self {
-        HashIndex::new()
-    }
-}
 
 /// Use a Type State pattern for HashIndex with two states, Uninitialized and Initialized
 impl HashIndex {
     pub fn new() -> Self {
         HashIndex {
-            indexes: Default::default(),
+            indexes: Arc::new([]),
             state: Uninitialized,
         }
+    }
+}
+
+//==============================================================================
+// Uninitialized State
+//------------------------------------------------------------------------------
+
+pub struct HashIndex<State = Uninitialized> {
+    #[allow(dead_code)]
+    state: State,
+    indexes: Arc<[HashIndexItem]>,
+}
+
+impl Default for HashIndex<Uninitialized> {
+    fn default() -> Self {
+        HashIndex::new()
     }
 }
 
@@ -89,7 +54,7 @@ impl HashIndex<Uninitialized> {
 
         // Try to load the hash index from disk
         match load_index_from_file() {
-            Ok(indexes) => self.indexes = indexes,
+            Ok(indexes) => self.indexes = indexes.into(),
             Err(err) => println!("Error encountered\n {:?}", err),
         }
 
@@ -145,7 +110,9 @@ impl HashIndex<Uninitialized> {
         append_items(&index_items)?;
 
         // Append the updates to the existing in memory items
-        self.indexes.extend(index_items);
+        let mut vec = self.indexes.to_vec();
+        vec.extend(index_items);
+        self.indexes = vec.into();
 
         // Return the "Initialized" state of the HashIndex type
         Ok(HashIndex {
@@ -154,6 +121,10 @@ impl HashIndex<Uninitialized> {
         })
     }
 }
+
+//==============================================================================
+// Initialized State
+//------------------------------------------------------------------------------
 
 impl HashIndex<Initialized> {
     pub fn num_indexes(&self) -> u64 {
@@ -196,6 +167,47 @@ impl HashIndex<Initialized> {
         };
 
         Ok((index, &self.indexes[index]))
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct HashIndexItem {
+    pub block_hash: H384, // 48 bytes
+    pub weave_size: u128, // 16 bytes
+    pub tx_root: H256,    // 32 bytes
+                              // TODO: add height
+                              // height: u128 (ar_block_index.erl: 111)
+                              // Oh yeah, height is implicit in the indexing of the items
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct BlockBounds {
+    pub height: u128,
+    pub block_start_offset: u128,
+    pub block_end_offset: u128,
+    pub tx_root: H256,
+}
+
+impl HashIndexItem {
+    pub fn from(json: &HashIndexJson) -> Result<Self> {
+        let block_hash: H384 = DecodeHash::from(&json.hash)
+            .map_err(|e| eyre!("Failed to decode block_hash: {}", e))?;
+        let weave_size = json
+            .weave_size
+            .parse()
+            .map_err(|e| eyre!("Failed to parse weave_size: {}", e))?;
+
+        let mut tx_root = H256::empty();
+        if !json.tx_root.is_empty() {
+            tx_root = DecodeHash::from(&json.tx_root)
+                .map_err(|e| eyre!("Failed to decode tx_root: {}", e))?;
+        }
+
+        Ok(Self {
+            tx_root,
+            block_hash,
+            weave_size,
+        })
     }
 }
 
