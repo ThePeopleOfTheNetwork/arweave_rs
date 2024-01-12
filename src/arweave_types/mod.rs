@@ -1,12 +1,11 @@
-use serde_derive::Deserialize;
 use eyre::Error;
-use uint::construct_uint;
 use fixed_hash::construct_fixed_hash;
 use serde::{de, de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
-use std::{str::FromStr, ops::Index, slice::SliceIndex};
+use serde_derive::Deserialize;
+use std::{ops::Index, slice::SliceIndex, str::FromStr};
+use uint::construct_uint;
 
 use self::decode::DecodeHash;
-
 pub mod decode;
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -38,7 +37,7 @@ pub struct ArweaveBlockHeader {
     pub last_retarget: u64,
     #[serde(default)]
     pub recall_byte2: Option<U256>,
-    #[serde(default)]
+    #[serde(default, with = "serde_option_encode_hash")]
     pub chunk2_hash: Option<H256>,
     pub hash: H256,
     pub diff: U256,
@@ -46,9 +45,8 @@ pub struct ArweaveBlockHeader {
     pub indep_hash: H384,
     pub txs: Base64List,
     pub tags: Base64List,
-    #[serde(deserialize_with = "decode_nonce_u64")]
-    pub nonce: u64,
-    #[serde(default, deserialize_with = "decode_to_bytes")]
+    pub nonce: Nonce,
+    #[serde(default, with = "serde_option_encode_hash")]
     pub tx_root: Option<H256>,
     pub wallet_list: H384,
     pub reward_addr: H256,
@@ -113,16 +111,17 @@ pub struct NonceLimiterInfo {
     pub zone_upper_bound: u64,
     pub next_zone_upper_bound: u64,
     pub prev_output: H256,
-    // #[serde(deserialize_with = "parse_array_of_hashes_to_bytes")]
     pub last_step_checkpoints: H256List,
-    // #[serde(deserialize_with = "parse_array_of_hashes_to_bytes")]
     pub checkpoints: H256List,
-    #[serde(default, with = "serde_option_u64_string")]
+    #[serde(default, with = "option_u64_stringify")]
     pub vdf_difficulty: Option<u64>,
-    #[serde(default, with = "serde_option_u64_string")]
+    #[serde(default, with = "option_u64_stringify")]
     pub next_vdf_difficulty: Option<u64>,
 }
 
+//==============================================================================
+// String to integer type
+//------------------------------------------------------------------------------
 /// Serializes and deserializes numbers represented as Strings.
 pub mod stringify {
     use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
@@ -147,9 +146,12 @@ pub mod stringify {
     }
 }
 
-/// serde helper method to convert an optional JSON `string` value to a `usize`
-mod serde_option_u64_string {
-    use serde::{self, Serializer, Deserializer, Deserialize};
+//==============================================================================
+// Option<u64>
+//------------------------------------------------------------------------------
+/// where u64 is represented as a string in the json
+mod option_u64_stringify {
+    use serde::{self, Deserialize, Deserializer, Serializer};
     use serde_json::Value;
 
     #[allow(dead_code)]
@@ -178,20 +180,107 @@ mod serde_option_u64_string {
     }
 }
 
+//==============================================================================
+// Optional<*Hash*> Type, support H256 and H384
+//------------------------------------------------------------------------------
+mod serde_option_encode_hash {
+    use serde::{self, Deserialize, Deserializer, Serializer};
 
-pub fn decode_to_bytes<'de, D, T>(deserializer: D) -> Result<T, D::Error>
-where
-    D: Deserializer<'de>,
-    T: DecodeHash,
-{
-    let s = String::deserialize(deserializer)?;
-    if s.is_empty() {
-        // Return an instance of T that represents an array of 0's.
-        Ok(T::empty())
-    } else {
-        T::from(s.as_str()).map_err(serde::de::Error::custom)
+    use super::{decode::DecodeHash, H256};
+
+    #[allow(dead_code)]
+    pub fn serialize<S>(value: &Option<H256>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match value {
+            Some(hash_bytes) => serializer.serialize_str(&base64_url::encode(&hash_bytes.0)),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: DecodeHash,
+    {
+        let s = String::deserialize(deserializer)?;
+        if s.is_empty() {
+            // Return an instance of T that represents an array of 0's.
+            Ok(T::empty())
+        } else {
+            T::from(s.as_str()).map_err(serde::de::Error::custom)
+        }
     }
 }
+
+//==============================================================================
+// Nonce Type
+//------------------------------------------------------------------------------
+
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct Nonce(pub u64);
+
+/// The nonce field in the ArweaveBlockHeader is unique. Arweave Nonces can
+/// range from 0-(RECALL_RANGE_SIZE/DATA_CHUNK_SIZE). Today this is a value 
+/// is between 0-400. Two bytes can store values between 0-511. This is enough 
+/// to store the  nonce range, when encoded to base64_url this encodes to a
+/// string of 1-3 bytes of base64_url_encoded data in the JSON.
+impl Nonce {
+    fn to_encoded_bytes(&self) -> String {
+        let bytes = self.0.to_be_bytes();
+        let bytes = trim_leading_zero_bytes(&bytes);
+        base64_url::encode(&bytes)
+    }
+}
+
+/// Implement Serialize for Nonce
+impl Serialize for Nonce {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.to_encoded_bytes().as_str())
+    }
+}
+
+/// Implement Deserialize for Nonce
+impl<'de> Deserialize<'de> for Nonce {
+    fn deserialize<D>(deserializer: D) -> Result<Nonce, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: String = Deserialize::deserialize(deserializer)?;
+        let bytes = base64_url::decode(&s).map_err(serde::de::Error::custom)?;
+        Ok(Nonce(
+            vec_to_u64_be(&bytes).map_err(serde::de::Error::custom)?,
+        ))
+    }
+}
+
+fn trim_leading_zero_bytes(bytes: &[u8]) -> &[u8] {
+    let mut non_zero_index = bytes.iter().position(|&x| x != 0).unwrap_or(bytes.len());
+    non_zero_index = std::cmp::min(non_zero_index, bytes.len() - 1);
+    &bytes[non_zero_index..]
+}
+
+/// While only < 4 bytes are expected, it doesn't hurt to support one more.
+fn vec_to_u64_be(bytes: &Vec<u8>) -> Result<u64, &'static str> {
+    match bytes.len() {
+        1 => Ok(bytes[0] as u64),
+        2 => Ok(u16::from_be_bytes([bytes[0], bytes[1]]) as u64),
+        3 => {
+            let mut arr = [0u8; 4];
+            arr[1..4].copy_from_slice(bytes);
+            Ok(u32::from_be_bytes(arr) as u64)
+        }
+        _ => Err("Vec<u8> must have 1, 2, or 3 bytes and no more"),
+    }
+}
+
+//==============================================================================
+// USD to AR rate
+//------------------------------------------------------------------------------
 
 fn parse_usd_to_ar_rate<'de, D>(deserializer: D) -> Result<[u64; 2], D::Error>
 where
@@ -217,68 +306,6 @@ where
     // Return the array of numbers, or an error if parsing failed.
     Ok([n1, n2])
 }
-
-fn parse_array_of_hashes_to_bytes<'de, D>(deserializer: D) -> Result<Vec<H256>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    struct Base64VecVisitor;
-
-    impl<'de> serde::de::Visitor<'de> for Base64VecVisitor {
-        type Value = Vec<H256>;
-
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            formatter.write_str("a base64 URL encoded string")
-        }
-
-        fn visit_seq<A>(self, mut seq: A) -> Result<Vec<H256>, A::Error>
-        where
-            A: serde::de::SeqAccess<'de>,
-        {
-            let mut buffer = Vec::new();
-
-            while let Some(elem) = seq.next_element::<String>()? {
-                let bytes: H256 = DecodeHash::from(&elem).map_err(serde::de::Error::custom)?;
-                buffer.push(bytes);
-            }
-
-            Ok(buffer)
-        }
-    }
-
-    deserializer.deserialize_seq(Base64VecVisitor)
-}
-
-//==============================================================================
-// nonce serialization
-//------------------------------------------------------------------------------
-fn decode_nonce_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: String = Deserialize::deserialize(deserializer)?;
-    let bytes = base64_url::decode(&s).map_err(serde::de::Error::custom)?;
-    vec_to_u64_be(&bytes).map_err(serde::de::Error::custom)
-}
-
-fn vec_to_u64_be(bytes: &Vec<u8>) -> Result<u64, &'static str> {
-    match bytes.len() {
-        1 => Ok(bytes[0] as u64),
-        2 => Ok(u16::from_be_bytes([bytes[0], bytes[1]]) as u64),
-        3 => {
-            let mut arr = [0u8; 4];
-            arr[1..4].copy_from_slice(bytes);
-            Ok(u32::from_be_bytes(arr) as u64)
-        }
-        4 => {
-            let mut arr = [0u8; 4];
-            arr[0..4].copy_from_slice(bytes);
-            Ok(u32::from_be_bytes(arr) as u64)
-        }
-        _ => Err("Vec<u8> must have 1, 2, 3, or 4 bytes"),
-    }
-}
-
 
 //==============================================================================
 // U256 Type
@@ -316,7 +343,6 @@ impl<'de> Deserialize<'de> for U256 {
 construct_fixed_hash! {
     pub struct H256(32);
 }
-
 
 impl H256 {
     pub fn to_vec(&self) -> Vec<u8> {
@@ -378,7 +404,6 @@ impl<'de> Deserialize<'de> for H384 {
         DecodeHash::from(&s).map_err(|e| D::Error::custom(format!("{}", e)))
     }
 }
-
 
 //==============================================================================
 // Base64 Type
@@ -486,7 +511,6 @@ impl<'de> Deserialize<'de> for Base64List {
     }
 }
 
-
 //==============================================================================
 // H256List Type
 //------------------------------------------------------------------------------
@@ -495,7 +519,7 @@ impl<'de> Deserialize<'de> for Base64List {
 pub struct H256List(pub Vec<H256>);
 
 impl H256List {
-    pub fn push(&mut self, value:H256) {
+    pub fn push(&mut self, value: H256) {
         self.0.push(value)
     }
 
@@ -511,7 +535,7 @@ impl H256List {
         self.0.iter()
     }
 
-    pub fn get(&self, index:usize) -> Option<&<usize as SliceIndex<[H256]>>::Output> {
+    pub fn get(&self, index: usize) -> Option<&<usize as SliceIndex<[H256]>>::Output> {
         self.0.get(index)
     }
 }
@@ -523,7 +547,6 @@ impl Index<usize> for H256List {
         &self.0[index]
     }
 }
-
 
 impl PartialEq<Vec<H256>> for H256List {
     fn eq(&self, other: &Vec<H256>) -> bool {

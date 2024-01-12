@@ -359,7 +359,7 @@ fn partition_number_is_valid(block_header: &ArweaveBlockHeader) -> bool {
 
 fn nonce_is_valid(block_header: &ArweaveBlockHeader) -> bool {
     let max = RECALL_RANGE_SIZE / DATA_CHUNK_SIZE;
-    let nonce_value = block_header.nonce as u32;
+    let nonce_value = block_header.nonce.0 as u32;
     nonce_value < max
 }
 
@@ -373,8 +373,8 @@ fn recall_bytes_is_valid(
         block_header.nonce_limiter_info.zone_upper_bound,
     );
 
-    let recall_byte_1 = recall_range1_start + block_header.nonce * DATA_CHUNK_SIZE as u64;
-    let recall_byte_2 = recall_range2_start + block_header.nonce * DATA_CHUNK_SIZE as u64;
+    let recall_byte_1 = recall_range1_start + block_header.nonce.0 * DATA_CHUNK_SIZE as u64;
+    let recall_byte_2 = recall_range2_start + block_header.nonce.0 * DATA_CHUNK_SIZE as u64;
 
     if let Some(b2) = block_header.recall_byte2 {
         if recall_byte_2 == b2 && recall_byte_1 == U256::from(block_header.recall_byte) {
@@ -660,7 +660,7 @@ fn block_hash_is_valid(block_header: &ArweaveBlockHeader) -> bool {
     let mut buff: Vec<u8> = Vec::new();
     buff.extend_buf(1, &b.previous_block.as_bytes())
         .extend_u64(1, &b.timestamp)
-        .extend_u64(2, &b.nonce)
+        .extend_u64(2, &b.nonce.0)
         .extend_u64(1, &b.height)
         .extend_buf(2, &diff_bytes)
         .extend_big(2, &b.cumulative_diff)
