@@ -1,34 +1,30 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 use arweave_randomx_rs::*;
-use arweave_rs::validator::hash_index::Initialized;
+use arweave_types::{*,decode::DecodeHash};
+use consensus::RANDOMX_PACKING_KEY;
+use std::{fs::File, io::Read, time::Instant};
+use validator::{
+    compute_solution_hash, hash_index::HashIndex, hash_index::Initialized,
+    hash_index_scraper::current_block_height, hash_index_scraper::request_hash_index_jsons,
+    pre_validate_block,
+};
+use vdf::verify::*;
+use packing::pack::{compute_randomx_hash_with_entropy, pack_chunk};
 use eyre::Result;
-use helpers::consensus::RANDOMX_PACKING_KEY;
-use helpers::DecodeHash;
-use json_types::{ArweaveBlockHeader, NonceLimiterInfo};
 use lazy_static::lazy_static;
 use openssl::hash;
-use packing::pack::{pack_chunk, compute_randomx_hash_with_entropy};
 use paris::Logger;
-use std::fs::File;
-use std::io::Read;
-use std::time::Instant;
-use validator::hash_index::HashIndex;
-use validator::hash_index_scraper::request_hash_index_jsons;
-use validator::{compute_solution_hash, pre_validate_block};
-use vdf::verify::*;
-use primitive_types::U256;
 
-use crate::validator::hash_index_scraper::current_block_height;
-
-mod helpers;
-mod json_types;
+mod arweave_types;
+mod consensus;
 mod packing;
 mod validator;
 mod vdf;
 
-#[derive(Default, Clone)]
+//#[derive(Default, Clone)]
 struct TestContext {
+    pub hash_index:HashIndex<Initialized>,
     pub base_case: Vec<NonceLimiterInfo>,
     pub reset_case: Vec<NonceLimiterInfo>,
     pub reset_first_case: Vec<NonceLimiterInfo>,
@@ -44,8 +40,8 @@ struct TestContext {
     pub block3_case: (ArweaveBlockHeader, ArweaveBlockHeader),
     pub reset_case2: (ArweaveBlockHeader, ArweaveBlockHeader),
     pub max_nonce_case: (ArweaveBlockHeader, ArweaveBlockHeader),
-    pub poa_failed_case:  (ArweaveBlockHeader, ArweaveBlockHeader),
-    pub bad_tx_path_case:  (ArweaveBlockHeader, ArweaveBlockHeader),
+    pub poa_failed_case: (ArweaveBlockHeader, ArweaveBlockHeader),
+    pub bad_tx_path_case: (ArweaveBlockHeader, ArweaveBlockHeader),
 }
 
 // Static test data for the tests, lazy loaded at runtime.
@@ -100,7 +96,13 @@ lazy_static! {
         let bad_tx_path_case = parse_block_header_from_file("data/blocks/1338549.json");
         let bad_tx_path_case_prev = parse_block_header_from_file("data/blocks/1338548.json");
 
+        let hash_index: HashIndex = HashIndex::new();
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let hash_index = runtime.block_on(hash_index.init()).unwrap();
+
+
         let tc:TestContext = TestContext {
+            hash_index,
             base_case: vec![base1, base2],
             reset_case: vec![reset1, reset2],
             reset_first_case: vec![reset_first1],
@@ -180,11 +182,11 @@ fn main() -> Result<()> {
     // In the end we just want to run our highly parallelized tests sequentially
     // one by one, which is what these lines of code accomplish.
 
-    // run_test(
-    //     test_last_step_checkpoints_base,
-    //     "test_last_step_checkpoints_base",
-    //     &mut logger,
-    // );
+    run_test(
+        test_last_step_checkpoints_base,
+        "test_last_step_checkpoints_base",
+        &mut logger,
+    );
 
     // run_test(test_checkpoints_base, "test_checkpoints_base", &mut logger);
 
@@ -197,7 +199,7 @@ fn main() -> Result<()> {
     // run_test(
     //     test_checkpoints_reset_first_step,
     //     "test_checkpoints_reset_first_step",
-    //     & mut logger
+    //     &mut logger,
     // );
 
     // run_test(
@@ -248,9 +250,7 @@ fn main() -> Result<()> {
 const ENCODED_KEY: &str = "UbkeSd5Det8s6uLyuNJwCDFOZMQFa2zvsdKJ0k694LM";
 const ENCODED_HASH: &str = "QQYWA46qnFENL4OTQdGU8bWBj5OKZ2OOPyynY3izung";
 const ENCODED_NONCE: &str = "f_z7RLug8etm3SrmRf-xPwXEL0ZQ_xHng2A5emRDQBw";
-const ENCODED_SEGMENT: &str =
-    "7XM3fgTCAY2GFpDjPZxlw4yw5cv8jNzZSZawywZGQ6_Ca-JDy2nX_MC2vjrIoDGp";
-
+const ENCODED_SEGMENT: &str = "7XM3fgTCAY2GFpDjPZxlw4yw5cv8jNzZSZawywZGQ6_Ca-JDy2nX_MC2vjrIoDGp";
 
 pub fn compute_randomx_hash(key: &[u8], input: &[u8]) -> Vec<u8> {
     let flags = RandomXFlag::get_recommended_flags();
@@ -258,23 +258,22 @@ pub fn compute_randomx_hash(key: &[u8], input: &[u8]) -> Vec<u8> {
     let vm = RandomXVM::new(flags, Some(cache), None).unwrap();
     vm.calculate_hash(input).unwrap()
 }
-    
 
 fn test_randomx_hash() -> bool {
-    let key: [u8; 32] = DecodeHash::from(ENCODED_KEY).unwrap();
-    let nonce: [u8; 32] = DecodeHash::from(ENCODED_NONCE).unwrap();
-    let segment: [u8; 48] = DecodeHash::from(ENCODED_SEGMENT).unwrap();
-    let expected_hash: [u8; 32] = DecodeHash::from(ENCODED_HASH).unwrap();
+    let key: H256 = DecodeHash::from(ENCODED_KEY).unwrap();
+    let nonce: H256 = DecodeHash::from(ENCODED_NONCE).unwrap();
+    let segment: H384 = DecodeHash::from(ENCODED_SEGMENT).unwrap();
+    let expected_hash: H256 = DecodeHash::from(ENCODED_HASH).unwrap();
 
     let mut input = Vec::new();
     input.append(&mut nonce.to_vec());
     input.append(&mut segment.to_vec());
 
-    let hash = compute_randomx_hash(&key, &input);
+    let hash = compute_randomx_hash(key.as_bytes(), &input);
 
     //println!("\nt:{hash:?}\ne:{expected_hash:?}");
 
-    for (a, b) in hash.iter().zip(expected_hash.iter()) {
+    for (a, b) in hash.iter().zip(expected_hash.0.iter()) {
         if a != b {
             return false;
         }
@@ -302,20 +301,21 @@ fn test_randomx_hash_with_entropy() -> bool {
     // ExpectedEntropy = read_entropy_fixture(),
     // ?assertEqual(ExpectedEntropy, OutEntropy).
 
-    let packing_key: [u8; 32] = DecodeHash::from(ENCODED_KEY).unwrap();
-    let nonce: [u8; 32] = DecodeHash::from(ENCODED_NONCE).unwrap();
-    let segment: [u8; 48] = DecodeHash::from(ENCODED_SEGMENT).unwrap();
-    let _expected_hash: [u8; 32] = DecodeHash::from(ENCODED_HASH).unwrap();
+    let packing_key: H256 = DecodeHash::from(ENCODED_KEY).unwrap();
+    let nonce: H256 = DecodeHash::from(ENCODED_NONCE).unwrap();
+    let segment: H384 = DecodeHash::from(ENCODED_SEGMENT).unwrap();
+    let _expected_hash: H256 = DecodeHash::from(ENCODED_HASH).unwrap();
 
     let mut input = Vec::new();
     input.append(&mut nonce.to_vec());
     input.append(&mut segment.to_vec());
 
-    let randomx_vm = create_randomx_vm(RandomXMode::FastHashing, &packing_key);
+    let randomx_vm = create_randomx_vm(RandomXMode::FastHashing, packing_key.as_bytes());
 
     let randomx_program_count = 8;
 
-    let (_hash, entropy) = compute_randomx_hash_with_entropy(&input, randomx_program_count, Some(&randomx_vm));
+    let (_hash, entropy) =
+        compute_randomx_hash_with_entropy(&input, randomx_program_count, Some(&randomx_vm));
 
     // Slice the first 32 bytes (256 bits)
     let first_256_bits = &entropy[0..32];
@@ -342,8 +342,14 @@ fn test_pre_validation() -> bool {
     let hash_index = runtime.block_on(hash_index.init()).unwrap();
 
     let randomx_vm = create_randomx_vm(RandomXMode::FastInitialization, RANDOMX_PACKING_KEY);
-    
-    let solution_hash = pre_validate_block(block_header, previous_block_header, &hash_index, Some(&randomx_vm)).unwrap();
+
+    let solution_hash = pre_validate_block(
+        block_header,
+        previous_block_header,
+        &hash_index,
+        Some(&randomx_vm),
+    )
+    .unwrap();
 
     let solution_hash_value_big: U256 = U256::from_big_endian(&solution_hash);
 
@@ -382,10 +388,10 @@ fn test_validator_index_jsons() -> bool {
 
 fn test_pack_chunk() -> bool {
     let (block_header, _) = &TEST_DATA.packing_case;
-    let reward_address: [u8; 32] = block_header.reward_addr;
-    let tx_root: [u8; 32] = block_header.tx_root.unwrap();
+    let reward_address = block_header.reward_addr;
+    let tx_root = block_header.tx_root.unwrap();
     let chunk = pack_chunk(U256::from(0), &reward_address, &tx_root);
-    chunk.len() > 0
+    !chunk.is_empty()
 }
 
 fn test_last_step_checkpoints_base() -> bool {

@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 use rayon::prelude::*;
 use openssl::sha;
-use primitive_types::U256;
-use crate::{json_types::NonceLimiterInfo, helpers::consensus::*};
+use crate::{consensus::*, arweave_types::{NonceLimiterInfo, H256, H384, U256}};
 
 // erlang consensus constants
 // ================================================
@@ -48,19 +47,19 @@ fn get_vdf_difficulty(nonce_info: &NonceLimiterInfo) -> usize {
 ///
 /// A new SHA256 seed hash containing the `reset_seed` entropy to use for
 /// calculating checkpoints after the reset.
-pub fn apply_reset_seed(seed: [u8; 32], reset_seed: [u8; 48]) -> [u8; 32] {
+pub fn apply_reset_seed(seed: H256, reset_seed: H384) -> H256 {
     let mut hasher = sha::Sha256::new();
 
     // First hash the reset_seed (a sha348 block hash)
     // (You can see this logic in ar_nonce_limiter:mix_seed)
-    hasher.update(&reset_seed);
+    hasher.update(reset_seed.as_bytes());
     let reset_hash = hasher.finish();
 
     // Then merge the current seed with the SHA256 has of the block hash.
     let mut hasher = sha::Sha256::new();
-    hasher.update(&seed);
+    hasher.update(seed.as_bytes());
     hasher.update(&reset_hash);
-    hasher.finish()
+    H256::from(hasher.finish())
 }
 
 /// Calculates a VDF checkpoint by sequentially hashing a salt+seed, by the
@@ -78,14 +77,14 @@ pub fn apply_reset_seed(seed: [u8; 32], reset_seed: [u8; 48]) -> [u8; 32] {
 /// - `Vec<[u8;32]>` A Vec containing the calculated checkpoint hashes `checkpoint_count` in length.
 pub fn vdf_sha2(
     salt: U256,
-    seed: [u8; 32],
+    seed: H256,
     num_checkpoints: usize,
     num_iterations: usize,
-) -> Vec<[u8; 32]> {
+) -> Vec<H256> {
     let mut local_salt: U256 = salt;
-    let mut local_seed: [u8; 32] = seed;
-    let mut salt_bytes: [u8; 32] = [0; 32];
-    let mut checkpoints: Vec<[u8; 32]> = vec![[0; 32]; num_checkpoints];
+    let mut local_seed: H256 = seed;
+    let mut salt_bytes: H256 = H256::zero();
+    let mut checkpoints: Vec<H256> = vec![H256::default(); num_checkpoints];
 
     for checkpoint_idx in 0..num_checkpoints {
         //  initial checkpoint hash
@@ -96,21 +95,21 @@ pub fn vdf_sha2(
         }
 
         // BigEndian to match erlang
-        local_salt.to_big_endian(&mut salt_bytes);
+        local_salt.to_big_endian(salt_bytes.as_mut());
 
         // Hash salt+seed
         let mut hasher = sha::Sha256::new();
-        hasher.update(&salt_bytes);
-        hasher.update(&local_seed);
-        let mut hash_bytes = hasher.finish();
+        hasher.update(salt_bytes.as_bytes());
+        hasher.update(local_seed.as_bytes());
+        let mut hash_bytes = H256::from(hasher.finish());
 
         // subsequent hash iterations (if needed)
         // -----------------------------------------------------------------
         for _ in 1..num_iterations {
             let mut hasher = sha::Sha256::new();
-            hasher.update(&salt_bytes);
-            hasher.update(&hash_bytes);
-            hash_bytes = hasher.finish();
+            hasher.update(salt_bytes.as_bytes());
+            hasher.update(hash_bytes.as_bytes());
+            hash_bytes = H256::from(hasher.finish());
         }
         
         // Store the result at the correct checkpoint index
@@ -155,7 +154,7 @@ pub fn last_step_checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
     let cp = checkpoint_hashes.clone();
 
     // Calculate all checkpoints in parallel with par_iter()
-    let mut test: Vec<[u8; 32]> = (0..NUM_CHECKPOINTS_IN_VDF_STEP)
+    let mut test: Vec<H256> = (0..NUM_CHECKPOINTS_IN_VDF_STEP)
         .into_par_iter()
         .map(|i| {
             let salt: U256 = (step_number_to_salt_number(global_step_number - 1) + i).into();
@@ -171,7 +170,7 @@ pub fn last_step_checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
 
     if !is_valid {
         // Compare the original list with the calculated one
-        let mismatches: Vec<(usize, &[u8;32], &[u8;32])> = nonce_info
+        let mismatches: Vec<(usize, &H256, &H256)> = nonce_info
             .last_step_checkpoints
             .iter()
             .zip(&test)
@@ -218,7 +217,11 @@ pub fn checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
     // Make a read only copy for parallel iterating
     let steps = step_hashes.clone();
     let steps_since_reset = get_vdf_steps_since_reset(nonce_info.global_step_number);
-    let reset_index = steps.len() - steps_since_reset - 2; // -2 here because we need the step before the reset (-1), and -1 because we added a hash to steps;
+     // -2 here because we need the step before the reset (-1), and -1 because 
+     // we pushed previous_seed to step_hashes making it one longer.
+     // We use i64 intentionally because the steps_since_reset may be larger
+     // than steps.len() and a negative reset_index will not match any of our steps
+    let reset_index:i64 = steps.len() as i64 - steps_since_reset as i64 - 2;
 
     // Calculate the step number of the first step in the blocks sequence
     let start_step_number = nonce_info.global_step_number as usize - nonce_info.checkpoints.len();
@@ -226,12 +229,12 @@ pub fn checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
     // We must calculate the checkpoint iterations sequentially because we only 
     // have the first and last checkpoint of each step, but we can do the steps
     // in parallel
-    let mut test: Vec<[u8; 32]> = (0..steps.len() - 1)
+    let mut test: Vec<H256> = (0..steps.len() - 1)
         .into_par_iter()
         .map(|i| {
             let salt: U256 = (step_number_to_salt_number(start_step_number + i)).into();
             let mut seed = steps[i];
-            if i == reset_index {
+            if i as i64 == reset_index {
                 seed = apply_reset_seed(seed, reset_seed);
             }
             let checkpoints = vdf_sha2(salt, seed, NUM_CHECKPOINTS_IN_VDF_STEP, num_iterations);
@@ -245,7 +248,7 @@ pub fn checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
 
     if !is_valid {
         // Compare the original list with the calculated one
-        let mismatches: Vec<(usize, &[u8;32], &[u8;32])> = nonce_info
+        let mismatches: Vec<(usize, &H256, &H256)> = nonce_info
             .checkpoints
             .iter()
             .zip(&test)
