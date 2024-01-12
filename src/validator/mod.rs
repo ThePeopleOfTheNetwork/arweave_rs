@@ -2,7 +2,7 @@
 use self::block_index::{BlockIndex, Initialized};
 use crate::{
     arweave_types::{H256,H384, ArweaveBlockHeader, PoaData, Base64, U256, DoubleSigningProof},
-    packing::{feistel::feistel_decrypt, pack::compute_entropy},
+    packing::{feistel::feistel_decrypt, compute_entropy},
     validator::merkle::validate_path, consensus::*,
 };
 use arweave_randomx_rs::RandomXVM;

@@ -10,7 +10,7 @@ use validator::{
     pre_validate_block,
 };
 use vdf::verify::*;
-use packing::pack::{compute_randomx_hash_with_entropy, pack_chunk};
+use packing::{compute_randomx_hash_with_entropy, pack_chunk};
 use eyre::Result;
 use lazy_static::lazy_static;
 use openssl::hash;
