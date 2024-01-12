@@ -8,14 +8,10 @@ pub fn feistel_hash(right: &[u8], key: &[u8]) -> [u8; 32] {
     // Use only the first FEISTEL_BLOCK_LENGTH bytes of right and key
     let right_slice: &[u8; FEISTEL_BLOCK_LENGTH] = &right[..FEISTEL_BLOCK_LENGTH.min(right.len())]
         .try_into()
-        .expect(&format!(
-            "the right_slice should be {FEISTEL_BLOCK_LENGTH} bytes"
-        ));
+        .unwrap_or_else(|_| panic!("the right_slice should be {FEISTEL_BLOCK_LENGTH} bytes"));
     let key_slice: &[u8; FEISTEL_BLOCK_LENGTH] = &key[..FEISTEL_BLOCK_LENGTH.min(key.len())]
         .try_into()
-        .expect(&format!(
-            "the key_slice should be {FEISTEL_BLOCK_LENGTH} bytes"
-        ));
+        .unwrap_or_else(|_| panic!("the key_slice should be {FEISTEL_BLOCK_LENGTH} bytes"));
 
     // SHA-256 hash the first 32 bytes of [right] and [key] together
     let mut hasher = sha::Sha256::new();
@@ -66,7 +62,7 @@ pub fn feistel_decrypt_block(
     (out_left, out_right)
 }
 
-/// Given a `ciphertext` array and an `in_key` array, both will be 
+/// Given a `ciphertext` array and an `in_key` array, both will be
 /// `RANDOMX_ENTROPY_SIZE` when decrypting Arweave chunks. `ciphertext` will
 /// be the encrypted chunk and `key` will be the RandomX entropy.
 pub fn feistel_decrypt(ciphertext: &[u8], in_key: &[u8]) -> Vec<u8> {
@@ -109,7 +105,7 @@ pub fn feistel_decrypt(ciphertext: &[u8], in_key: &[u8]) -> Vec<u8> {
     // Do the final decrypt step with the first bytes of the inputs
     let in_left = ciphertext.split_at(FEISTEL_BLOCK_LENGTH).0;
     let in_right = ciphertext.split_at(FEISTEL_BLOCK_LENGTH).1;
-    let (out_left, out_right) = feistel_decrypt_block(in_left, in_right, &in_key);
+    let (out_left, out_right) = feistel_decrypt_block(in_left, in_right, in_key);
 
     // Prepend [out_right] and [out_left] to the plaintext response
     plaintext[..FEISTEL_BLOCK_LENGTH].copy_from_slice(&out_left);

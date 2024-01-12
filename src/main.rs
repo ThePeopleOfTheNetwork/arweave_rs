@@ -102,7 +102,7 @@ lazy_static! {
 
 
         let tc:TestContext = TestContext {
-            hash_index: hash_index,
+            hash_index,
             base_case: vec![base1, base2],
             reset_case: vec![reset1, reset2],
             reset_first_case: vec![reset_first1],
@@ -269,7 +269,7 @@ fn test_randomx_hash() -> bool {
     input.append(&mut nonce.to_vec());
     input.append(&mut segment.to_vec());
 
-    let hash = compute_randomx_hash(&key.as_bytes(), &input);
+    let hash = compute_randomx_hash(key.as_bytes(), &input);
 
     //println!("\nt:{hash:?}\ne:{expected_hash:?}");
 
@@ -310,7 +310,7 @@ fn test_randomx_hash_with_entropy() -> bool {
     input.append(&mut nonce.to_vec());
     input.append(&mut segment.to_vec());
 
-    let randomx_vm = create_randomx_vm(RandomXMode::FastHashing, &packing_key.as_bytes());
+    let randomx_vm = create_randomx_vm(RandomXMode::FastHashing, packing_key.as_bytes());
 
     let randomx_program_count = 8;
 
@@ -391,7 +391,7 @@ fn test_pack_chunk() -> bool {
     let reward_address = block_header.reward_addr;
     let tx_root = block_header.tx_root.unwrap();
     let chunk = pack_chunk(U256::from(0), &reward_address, &tx_root);
-    chunk.len() > 0
+    !chunk.is_empty()
 }
 
 fn test_last_step_checkpoints_base() -> bool {

@@ -52,12 +52,12 @@ pub fn apply_reset_seed(seed: H256, reset_seed: H384) -> H256 {
 
     // First hash the reset_seed (a sha348 block hash)
     // (You can see this logic in ar_nonce_limiter:mix_seed)
-    hasher.update(&reset_seed.as_bytes());
+    hasher.update(reset_seed.as_bytes());
     let reset_hash = hasher.finish();
 
     // Then merge the current seed with the SHA256 has of the block hash.
     let mut hasher = sha::Sha256::new();
-    hasher.update(&seed.as_bytes());
+    hasher.update(seed.as_bytes());
     hasher.update(&reset_hash);
     H256::from(hasher.finish())
 }
@@ -99,16 +99,16 @@ pub fn vdf_sha2(
 
         // Hash salt+seed
         let mut hasher = sha::Sha256::new();
-        hasher.update(&salt_bytes.as_bytes());
-        hasher.update(&local_seed.as_bytes());
+        hasher.update(salt_bytes.as_bytes());
+        hasher.update(local_seed.as_bytes());
         let mut hash_bytes = H256::from(hasher.finish());
 
         // subsequent hash iterations (if needed)
         // -----------------------------------------------------------------
         for _ in 1..num_iterations {
             let mut hasher = sha::Sha256::new();
-            hasher.update(&salt_bytes.as_bytes());
-            hasher.update(&hash_bytes.as_bytes());
+            hasher.update(salt_bytes.as_bytes());
+            hasher.update(hash_bytes.as_bytes());
             hash_bytes = H256::from(hasher.finish());
         }
         

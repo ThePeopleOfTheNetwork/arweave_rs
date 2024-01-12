@@ -154,10 +154,10 @@ pub fn pre_validate_block(
     Ok(solution_hash)
 }
 
-pub fn compute_solution_hash(mining_hash: &[u8; 32], hash_preimage: &[u8]) -> [u8; 32] {
+pub fn compute_solution_hash(mining_hash: &[u8; 32], hash_preimage: &H256) -> [u8; 32] {
     let mut hasher = sha::Sha256::new();
     hasher.update(mining_hash);
-    hasher.update(hash_preimage);
+    hasher.update(hash_preimage.as_bytes());
     hasher.finish()
 }
 
@@ -308,7 +308,7 @@ fn quick_pow_is_valid(
 
     // Now combine H0 with the preimage to create the solution_hash
     let hash_preimage = block_header.hash_preimage;
-    let solution_hash = compute_solution_hash(&mining_hash, &hash_preimage.as_bytes());
+    let solution_hash = compute_solution_hash(&mining_hash, &hash_preimage);
 
     let solution_hash_value_big: U256 = U256::from_big_endian(&solution_hash);
 
@@ -468,14 +468,15 @@ fn poa_is_valid(
 
     // Create packed entropy scratchpad for the chunk + reward_address
     // randomx_long_with_entropy.cpp: 51
-    let input = get_chunk_entropy_input(chunk_offset.into(), &H256::from(block_bounds.tx_root), reward_addr);
+    let input = get_chunk_entropy_input(chunk_offset.into(), &block_bounds.tx_root, reward_addr);
     let randomx_program_count = RANDOMX_PACKING_ROUNDS_2_6;
     let entropy = compute_entropy(&input, randomx_program_count, randomx_vm);
  
 
     // Use a feistel cypher + entropy to decrypt the chunk
     // randomx_long_with_entropy.cpp: 113
-    let decrypted_chunk = feistel_decrypt(&poa_data.chunk.as_slice(), &entropy);
+    let ciphertext = poa_data.chunk.as_slice();
+    let decrypted_chunk = feistel_decrypt(ciphertext, &entropy);
 
     // Because all chunks are packed as DATA_CHUNK_SIZE, if the proof chunk is
     // smaller we need to trim off the excess padding introduced by packing
@@ -508,11 +509,11 @@ impl DoubleSigningProofBytes for DoubleSigningProof {
             .extend_optional_raw_buf(64, &self.sig1)
             .extend_big(2, &self.cdiff1.unwrap_or_default())
             .extend_big(2, &self.prev_cdiff1.unwrap_or_default())
-            .extend_raw_buf(8, &self.preimage1.unwrap_or_default().as_bytes())
+            .extend_raw_buf(8, self.preimage1.unwrap_or_default().as_bytes())
             .extend_optional_raw_buf(64, &self.sig2)
             .extend_big(2, &self.cdiff2.unwrap_or_default())
             .extend_big(2, &self.prev_cdiff2.unwrap_or_default())
-            .extend_raw_buf(8, &self.preimage2.unwrap_or_default().as_bytes());
+            .extend_raw_buf(8, self.preimage2.unwrap_or_default().as_bytes());
         buff
     }
 }
@@ -563,7 +564,7 @@ impl ExtendBytes for Vec<u8> {
     fn extend_optional_raw_buf(&mut self, raw_size: usize, val: &Option<Base64>) -> &mut Self {
         let mut bytes: Vec<u8> = Vec::new();
         if let Some(val_bytes) = val {
-            bytes.extend_from_slice(&val_bytes.as_slice());
+            bytes.extend_from_slice(val_bytes.as_slice());
         }
         self.extend_raw_buf(raw_size, &bytes)
     }
@@ -658,20 +659,20 @@ fn block_hash_is_valid(block_header: &ArweaveBlockHeader) -> bool {
     //let expected: Vec<u8> = vec![];
 
     let mut buff: Vec<u8> = Vec::new();
-    buff.extend_buf(1, &b.previous_block.as_bytes())
+    buff.extend_buf(1, b.previous_block.as_bytes())
         .extend_u64(1, &b.timestamp)
         .extend_u64(2, &b.nonce.0)
         .extend_u64(1, &b.height)
         .extend_buf(2, &diff_bytes)
         .extend_big(2, &b.cumulative_diff)
         .extend_u64(1, &b.last_retarget)
-        .extend_buf(1, &b.hash.as_bytes())
+        .extend_buf(1, b.hash.as_bytes())
         .extend_u64(2, &b.block_size)
         .extend_u64(2, &b.weave_size)
-        .extend_buf(1, &b.reward_addr.as_bytes())
+        .extend_buf(1, b.reward_addr.as_bytes())
         .extend_optional_hash(1, &b.tx_root)
-        .extend_buf(1, &b.wallet_list.as_bytes())
-        .extend_buf(1, &b.hash_list_merkle.as_bytes())
+        .extend_buf(1, b.wallet_list.as_bytes())
+        .extend_buf(1, b.hash_list_merkle.as_bytes())
         .extend_u64(1, &b.reward_pool)
         .extend_u64(1, &b.packing_2_5_threshold)
         .extend_u64(1, &b.strict_data_split_threshold)
@@ -683,23 +684,23 @@ fn block_hash_is_valid(block_header: &ArweaveBlockHeader) -> bool {
         .extend_buf_list(1, &b.txs.0)
         .extend_u64(1, &b.reward)
         .extend_u64(2, &b.recall_byte)
-        .extend_buf(1, &b.hash_preimage.as_bytes())
+        .extend_buf(1, b.hash_preimage.as_bytes())
         .extend_optional_big(2, &b.recall_byte2)
-        .extend_buf(2, &b.reward_key.as_slice())
+        .extend_buf(2, b.reward_key.as_slice())
         .extend_u64(1, &b.partition_number)
-        .extend_raw_buf(32, &nonce_info.output.as_bytes())
+        .extend_raw_buf(32, nonce_info.output.as_bytes())
         .extend_raw_buf(8, &nonce_info.global_step_number.to_be_bytes())
-        .extend_raw_buf(48, &nonce_info.seed.as_bytes())
-        .extend_raw_buf(48, &nonce_info.next_seed.as_bytes())
+        .extend_raw_buf(48, nonce_info.seed.as_bytes())
+        .extend_raw_buf(48, nonce_info.next_seed.as_bytes())
         .extend_raw_buf(32, &nonce_info.zone_upper_bound.to_be_bytes())
         .extend_raw_buf(32, &nonce_info.next_zone_upper_bound.to_be_bytes())
-        .extend_buf(1, &b.nonce_limiter_info.prev_output.as_bytes())
+        .extend_buf(1, b.nonce_limiter_info.prev_output.as_bytes())
         .extend_hash_list(&b.nonce_limiter_info.checkpoints.0)
         .extend_hash_list(&b.nonce_limiter_info.last_step_checkpoints.0)
-        .extend_buf(1, &b.previous_solution_hash.as_bytes())
+        .extend_buf(1, b.previous_solution_hash.as_bytes())
         .extend_big(1, &b.price_per_gib_minute)
         .extend_big(1, &b.scheduled_price_per_gib_minute)
-        .extend_raw_buf(32, &b.reward_history_hash.as_bytes())
+        .extend_raw_buf(32, b.reward_history_hash.as_bytes())
         .extend_big(1, &b.debt_supply)
         .extend_raw_big(3, &b.kryder_plus_rate_multiplier)
         .extend_raw_big(1, &b.kryder_plus_rate_multiplier_latch)
@@ -709,13 +710,13 @@ fn block_hash_is_valid(block_header: &ArweaveBlockHeader) -> bool {
         .extend_big(2, &b.previous_cumulative_diff)
         // Added in 2.7
         .extend_big(2, &b.merkle_rebase_support_threshold)
-        .extend_buf(3, &b.poa.data_path.as_slice())
-        .extend_buf(3, &b.poa.tx_path.as_slice())
-        .extend_buf(3, &b.poa2.data_path.as_slice())
-        .extend_buf(3, &b.poa2.tx_path.as_slice())
-        .extend_raw_buf(32, &b.chunk_hash.as_bytes())
+        .extend_buf(3, b.poa.data_path.as_slice())
+        .extend_buf(3, b.poa.tx_path.as_slice())
+        .extend_buf(3, b.poa2.data_path.as_slice())
+        .extend_buf(3, b.poa2.tx_path.as_slice())
+        .extend_raw_buf(32, b.chunk_hash.as_bytes())
         .extend_optional_hash(1, &b.chunk2_hash)
-        .extend_raw_buf(32, &b.block_time_history_hash.as_bytes())
+        .extend_raw_buf(32, b.block_time_history_hash.as_bytes())
         .extend_u64(1, &nonce_info.vdf_difficulty.unwrap_or_default())
         .extend_u64(1, &nonce_info.next_vdf_difficulty.unwrap_or_default());
 
@@ -732,7 +733,7 @@ fn block_hash_is_valid(block_header: &ArweaveBlockHeader) -> bool {
 
     let mut hasher = sha::Sha384::new();
     hasher.update(&signed_hash);
-    hasher.update(&b.signature.as_slice());
+    hasher.update(b.signature.as_slice());
     let hash = H384::from(hasher.finish());
 
     hash == b.indep_hash

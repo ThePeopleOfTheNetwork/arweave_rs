@@ -102,7 +102,7 @@ pub fn get_byte_offset(offset: U256, block_start_offset: u128, block_end_offset:
 /// Generate a chunk ID used to construct the Merkle tree from the tx data chunks.
 pub fn generate_chunk_id(chunk: &[u8]) -> [u8; 32] {
     let mut hasher = sha::Sha256::new();
-    hasher.update(&chunk);
+    hasher.update(chunk);
     hasher.finish()
 }
 

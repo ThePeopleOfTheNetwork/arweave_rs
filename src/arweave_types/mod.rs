@@ -1,3 +1,5 @@
+#![allow(clippy::assign_op_pattern)]
+#![allow(clippy::non_canonical_clone_impl)]
 use eyre::Error;
 use fixed_hash::construct_fixed_hash;
 use serde::{de, de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
@@ -169,12 +171,11 @@ mod option_u64_stringify {
     {
         let opt_val: Option<Value> = Option::deserialize(deserializer)?;
 
-        let ret = match opt_val {
+        match opt_val {
             Some(Value::String(s)) => s.parse::<u64>().map(Some).map_err(serde::de::Error::custom),
             Some(_) => Err(serde::de::Error::custom("Invalid type")),
             None => Ok(None),
-        };
-        ret
+        }
     }
 }
 
@@ -332,13 +333,14 @@ impl<'de> Deserialize<'de> for USDToARRate {
         Ok(USDToARRate([n1, n2]))
     }
 }
-
+    
 //==============================================================================
 // U256 Type
 //------------------------------------------------------------------------------
 construct_uint! {
     /// 256-bit unsigned integer.
     #[cfg_attr(feature = "scale-info", derive(TypeInfo))]
+
     pub struct U256(4);
 }
 
@@ -366,12 +368,14 @@ impl<'de> Deserialize<'de> for U256 {
 //==============================================================================
 // H256 Type
 //------------------------------------------------------------------------------
+
 construct_fixed_hash! {
+    
     pub struct H256(32);
 }
 
 impl H256 {
-    pub fn to_vec(&self) -> Vec<u8> {
+    pub fn to_vec(self) -> Vec<u8> {
         self.0.to_vec()
     }
 }
@@ -393,7 +397,7 @@ impl<'de> Deserialize<'de> for H256 {
         D: Deserializer<'de>,
     {
         let s: String = Deserialize::deserialize(deserializer)?;
-        DecodeHash::from(&s).map_err(|e| D::Error::custom(format!("{}", e)))
+        DecodeHash::from(&s).map_err( D::Error::custom)
     }
 }
 
@@ -405,7 +409,7 @@ construct_fixed_hash! {
 }
 
 impl H384 {
-    pub fn to_vec(&self) -> Vec<u8> {
+    pub fn to_vec(self) -> Vec<u8> {
         self.0.to_vec()
     }
 }
@@ -427,7 +431,7 @@ impl<'de> Deserialize<'de> for H384 {
         D: Deserializer<'de>,
     {
         let s: String = Deserialize::deserialize(deserializer)?;
-        DecodeHash::from(&s).map_err(|e| D::Error::custom(format!("{}", e)))
+        DecodeHash::from(&s).map_err(D::Error::custom)
     }
 }
 
@@ -436,14 +440,8 @@ impl<'de> Deserialize<'de> for H384 {
 //------------------------------------------------------------------------------
 /// A struct of [`Vec<u8>`] used for all Base64Url encoded fields
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Base64(pub Vec<u8>);
-
-impl Default for Base64 {
-    fn default() -> Self {
-        Base64(vec![])
-    }
-}
 
 impl std::fmt::Display for Base64 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -471,6 +469,10 @@ impl Base64 {
 
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     pub fn as_slice(&self) -> &[u8] {
@@ -555,6 +557,10 @@ impl H256List {
 
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, H256> {

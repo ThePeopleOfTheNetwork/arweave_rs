@@ -203,9 +203,9 @@ impl HashIndexItem {
     // Serialize the HashIndexItem to bytes
     fn to_bytes(&self) -> [u8; 48 + 16 + 32] {
         let mut bytes = [0u8; 48 + 16 + 32];
-        bytes[0..48].copy_from_slice(&self.block_hash.as_bytes());
+        bytes[0..48].copy_from_slice(self.block_hash.as_bytes());
         bytes[48..64].copy_from_slice(&self.weave_size.to_le_bytes());
-        bytes[64..96].copy_from_slice(&self.tx_root.as_bytes());
+        bytes[64..96].copy_from_slice(self.tx_root.as_bytes());
         bytes
     }
 
