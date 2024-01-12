@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 use arweave_randomx_rs::*;
-use arweave_types::{*,decode_hash::DecodeHash};
+use arweave_types::{*,decode::DecodeHash};
 use consensus::RANDOMX_PACKING_KEY;
 use std::{fs::File, io::Read, time::Instant};
 use validator::{

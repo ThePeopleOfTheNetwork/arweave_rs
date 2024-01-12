@@ -3,7 +3,7 @@ use std::fs::{File, OpenOptions, self};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
-use crate::arweave_types::{decode_hash::*, H384, H256};
+use crate::arweave_types::{decode::*, H384, H256};
 
 use super::hash_index_scraper::{current_block_height_async, request_indexes, HashIndexJson};
 

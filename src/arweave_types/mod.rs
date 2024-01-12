@@ -3,11 +3,11 @@ use eyre::Error;
 use uint::construct_uint;
 use fixed_hash::construct_fixed_hash;
 use serde::{de, de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
-use std::str::FromStr;
+use std::{str::FromStr, ops::Index, slice::SliceIndex};
 
-use self::decode_hash::DecodeHash;
+use self::decode::DecodeHash;
 
-pub mod decode_hash;
+pub mod decode;
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct ArweaveBlockHeader {
@@ -113,10 +113,10 @@ pub struct NonceLimiterInfo {
     pub zone_upper_bound: u64,
     pub next_zone_upper_bound: u64,
     pub prev_output: H256,
-    #[serde(deserialize_with = "parse_array_of_hashes_to_bytes")]
-    pub last_step_checkpoints: Vec<H256>,
-    #[serde(deserialize_with = "parse_array_of_hashes_to_bytes")]
-    pub checkpoints: Vec<H256>,
+    // #[serde(deserialize_with = "parse_array_of_hashes_to_bytes")]
+    pub last_step_checkpoints: H256List,
+    // #[serde(deserialize_with = "parse_array_of_hashes_to_bytes")]
+    pub checkpoints: H256List,
     #[serde(default, with = "serde_option_u64_string")]
     pub vdf_difficulty: Option<u64>,
     #[serde(default, with = "serde_option_u64_string")]
@@ -483,5 +483,78 @@ impl<'de> Deserialize<'de> for Base64List {
     {
         // Deserialize a Vec<Base64> and then wrap it in Base64Array
         Vec::<Base64>::deserialize(deserializer).map(Base64List)
+    }
+}
+
+
+//==============================================================================
+// H256List Type
+//------------------------------------------------------------------------------
+/// A struct of [`Vec<H256>`] used for arrays/lists of Base64 encoded hashes
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct H256List(pub Vec<H256>);
+
+impl H256List {
+    pub fn push(&mut self, value:H256) {
+        self.0.push(value)
+    }
+
+    pub fn reverse(&mut self) {
+        self.0.reverse()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, H256> {
+        self.0.iter()
+    }
+
+    pub fn get(&self, index:usize) -> Option<&<usize as SliceIndex<[H256]>>::Output> {
+        self.0.get(index)
+    }
+}
+
+impl Index<usize> for H256List {
+    type Output = H256;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
+    }
+}
+
+
+impl PartialEq<Vec<H256>> for H256List {
+    fn eq(&self, other: &Vec<H256>) -> bool {
+        &self.0 == other
+    }
+}
+
+impl PartialEq<H256List> for Vec<H256> {
+    fn eq(&self, other: &H256List) -> bool {
+        self == &other.0
+    }
+}
+
+// Implement Serialize for H256 base64url encoded Array
+impl Serialize for H256List {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Serialize self.0 (Vec<Base64>) directly
+        self.0.serialize(serializer)
+    }
+}
+
+// Implement Deserialize for H256 base64url encoded Array
+impl<'de> Deserialize<'de> for H256List {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Deserialize a Vec<Base64> and then wrap it in Base64Array
+        Vec::<H256>::deserialize(deserializer).map(H256List)
     }
 }
