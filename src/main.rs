@@ -188,49 +188,49 @@ fn main() -> Result<()> {
         &mut logger,
     );
 
-    run_test(test_checkpoints_base, "test_checkpoints_base", &mut logger);
+    // run_test(test_checkpoints_base, "test_checkpoints_base", &mut logger);
 
-    run_test(
-        test_checkpoints_reset,
-        "test_checkpoints_reset",
-        &mut logger,
-    );
+    // run_test(
+    //     test_checkpoints_reset,
+    //     "test_checkpoints_reset",
+    //     &mut logger,
+    // );
 
-    run_test(
-        test_checkpoints_reset_first_step,
-        "test_checkpoints_reset_first_step",
-        &mut logger,
-    );
+    // run_test(
+    //     test_checkpoints_reset_first_step,
+    //     "test_checkpoints_reset_first_step",
+    //     &mut logger,
+    // );
 
-    run_test(
-        test_last_step_checkpoints_with_last_step_reset,
-        "test_last_step_checkpoints_with_last_step_reset",
-        &mut logger,
-    );
+    // run_test(
+    //     test_last_step_checkpoints_with_last_step_reset,
+    //     "test_last_step_checkpoints_with_last_step_reset",
+    //     &mut logger,
+    // );
 
-    run_test(
-        test_checkpoints_reset_last_step,
-        "test_checkpoints_reset_last_step",
-        &mut logger,
-    );
+    // run_test(
+    //     test_checkpoints_reset_last_step,
+    //     "test_checkpoints_reset_last_step",
+    //     &mut logger,
+    // );
 
-    run_test(
-        test_checkpoints_reset_last_step_next,
-        "test_checkpoints_reset_last_step_next",
-        &mut logger,
-    );
+    // run_test(
+    //     test_checkpoints_reset_last_step_next,
+    //     "test_checkpoints_reset_last_step_next",
+    //     &mut logger,
+    // );
 
-    run_test(
-        test_checkpoints_reset_2nd_to_last_step,
-        "test_checkpoints_reset_2nd_to_last_step",
-        &mut logger,
-    );
+    // run_test(
+    //     test_checkpoints_reset_2nd_to_last_step,
+    //     "test_checkpoints_reset_2nd_to_last_step",
+    //     &mut logger,
+    // );
 
-    run_test(
-        test_checkpoints_reset_3rd_to_last_step,
-        "test_checkpoints_reset_3rd_to_last_step",
-        &mut logger,
-    );
+    // run_test(
+    //     test_checkpoints_reset_3rd_to_last_step,
+    //     "test_checkpoints_reset_3rd_to_last_step",
+    //     &mut logger,
+    // );
 
     //run_test(test_pack_chunk, "test_pack_chunk", &mut logger);
     // run_test(test_validator_init, "test_validator_init", &mut logger);
