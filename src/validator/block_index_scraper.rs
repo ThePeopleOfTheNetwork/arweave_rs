@@ -66,7 +66,7 @@ pub async fn request_block_index_jsons(
                     let parsed = res
                         .json::<Vec<BlockIndexJson>>()
                         .await
-                        .expect("JSON should be parsable to [HashIndexJson]");
+                        .expect("JSON should be parsable to [BlockIndexJson]");
                     break Ok(parsed);
                 } else {
                     last_error = Some(eyre!("Last HTTP Status code was {}", res.status()));

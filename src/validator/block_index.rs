@@ -14,7 +14,7 @@ const FILE_PATH: &str = "data/index.dat";
 pub struct Uninitialized;
 pub struct Initialized;
 
-/// Use a Type State pattern for HashIndex with two states, Uninitialized and Initialized
+/// Use a Type State pattern for BlockIndex with two states, Uninitialized and Initialized
 impl BlockIndex {
     pub fn new() -> Self {
         BlockIndex {
@@ -63,7 +63,7 @@ impl BlockIndex<Uninitialized> {
 
         // EARLY OUT: if the index is already current
         if latest_height >= current_block_height - 20 {
-            // Return the "Initialized" state of the HashIndex type
+            // Return the "Initialized" state of the BlockIndex type
             return Ok(BlockIndex {
                 indexes: self.indexes,
                 state: Initialized,
@@ -114,7 +114,7 @@ impl BlockIndex<Uninitialized> {
         vec.extend(index_items);
         self.indexes = vec.into();
 
-        // Return the "Initialized" state of the HashIndex type
+        // Return the "Initialized" state of the BlockIndex type
         Ok(BlockIndex {
             indexes: self.indexes,
             state: Initialized,
@@ -212,7 +212,7 @@ impl BlockIndexItem {
 }
 
 impl BlockIndexItem {
-    // Serialize the HashIndexItem to bytes
+    // Serialize the BlockIndexItem to bytes
     fn to_bytes(&self) -> [u8; 48 + 16 + 32] {
         let mut bytes = [0u8; 48 + 16 + 32];
         bytes[0..48].copy_from_slice(self.block_hash.as_bytes());
@@ -221,7 +221,7 @@ impl BlockIndexItem {
         bytes
     }
 
-    // Deserialize bytes to HashIndexItem
+    // Deserialize bytes to BlockIndexItem
     fn from_bytes(bytes: &[u8]) -> BlockIndexItem {
         let mut block_hash = H384::empty();
         let mut weave_size_bytes = [0u8; 16];
@@ -294,7 +294,7 @@ fn load_index_from_file() -> io::Result<Vec<BlockIndexItem>> {
     let mut buffer = vec![0u8; file_size as usize];
     file.read_exact(&mut buffer)?;
 
-    // Initialize a vector to hold the HashIndexItems
+    // Initialize a vector to hold the BlockIndexItems
     let mut block_index_items = Vec::new();
 
     // Chunk the buffer and deserialize each chunk
