@@ -5,14 +5,12 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::arweave_types::{decode::*, H384, H256};
+use super::{BlockIndex, Uninitialized, Initialized};
 use super::block_index_scraper::{current_block_height_async, request_indexes, BlockIndexJson};
 
 const HASH_INDEX_ITEM_SIZE: u64 = 48 + 16 + 32;
 const FILE_PATH: &str = "data/index.dat";
 
-// Allowable states for the index
-pub struct Uninitialized;
-pub struct Initialized;
 
 /// Use a Type State pattern for BlockIndex with two states, Uninitialized and Initialized
 impl BlockIndex {
@@ -27,12 +25,6 @@ impl BlockIndex {
 //==============================================================================
 // Uninitialized State
 //------------------------------------------------------------------------------
-
-pub struct BlockIndex<State = Uninitialized> {
-    #[allow(dead_code)]
-    state: State,
-    indexes: Arc<[BlockIndexItem]>,
-}
 
 impl Default for BlockIndex<Uninitialized> {
     fn default() -> Self {
@@ -107,7 +99,7 @@ impl BlockIndex<Uninitialized> {
             .unwrap();
 
         // Write the updates to the index and to disk
-        append_items(&index_items)?;
+        append_items_to_file(&index_items)?;
 
         // Append the updates to the existing in memory items
         let mut vec = self.indexes.to_vec();
@@ -239,15 +231,17 @@ impl BlockIndexItem {
     }
 }
 
-fn save_initial_index(hash_items: &[BlockIndexItem]) -> io::Result<()> {
+#[allow(dead_code)]
+fn save_index(block_index_items: &[BlockIndexItem]) -> io::Result<()> {
     let mut file = File::create(FILE_PATH)?;
-    for item in hash_items {
+    for item in block_index_items {
         let bytes = item.to_bytes();
         file.write_all(&bytes)?;
     }
     Ok(())
 }
 
+#[allow(dead_code)]
 fn read_item_at(block_height: u64) -> io::Result<BlockIndexItem> {
     let mut file = File::open(FILE_PATH)?;
     let mut buffer = [0; HASH_INDEX_ITEM_SIZE as usize];
@@ -256,13 +250,14 @@ fn read_item_at(block_height: u64) -> io::Result<BlockIndexItem> {
     Ok(BlockIndexItem::from_bytes(&buffer))
 }
 
+#[allow(dead_code)]
 fn append_item(item: BlockIndexItem) -> io::Result<()> {
     let mut file = OpenOptions::new().append(true).open(FILE_PATH)?;
     file.write_all(&item.to_bytes())?;
     Ok(())
 }
 
-fn append_items(items: &Vec<BlockIndexItem>) -> io::Result<()> {
+fn append_items_to_file(items: &Vec<BlockIndexItem>) -> io::Result<()> {
     let mut file = OpenOptions::new().append(true).open(FILE_PATH)?;
 
     for item in items {
@@ -272,7 +267,8 @@ fn append_items(items: &Vec<BlockIndexItem>) -> io::Result<()> {
     Ok(())
 }
 
-fn update_item_at(block_height: u64, item: BlockIndexItem) -> io::Result<()> {
+#[allow(dead_code)]
+fn update_file_item_at(block_height: u64, item: BlockIndexItem) -> io::Result<()> {
     let mut file = OpenOptions::new().read(true).write(true).open(FILE_PATH)?;
     file.seek(SeekFrom::Start(block_height * HASH_INDEX_ITEM_SIZE))?;
     file.write_all(&item.to_bytes())?;

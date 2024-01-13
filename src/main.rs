@@ -3,7 +3,7 @@
 use arweave_randomx_rs::*;
 use arweave_types::{*,decode::DecodeHash};
 use consensus::RANDOMX_PACKING_KEY;
-use indexes::{block_index::*,block_index_scraper::request_block_index_jsons};
+use indexes::{block_index::*,block_index_scraper::request_block_index_jsons, Initialized};
 use std::{fs::File, io::Read, time::Instant};
 use validator::pre_validate_block;
 use vdf::verify::*;
@@ -12,6 +12,8 @@ use eyre::Result;
 use lazy_static::lazy_static;
 use openssl::hash;
 use paris::Logger;
+
+use crate::indexes::BlockIndex;
 
 mod arweave_types;
 mod indexes;
