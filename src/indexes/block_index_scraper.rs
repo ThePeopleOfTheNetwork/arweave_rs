@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use crate::arweave_types::ArweaveBlockHeader;
 
+// This is the format of the JSON
 // {
 //   "tx_root" : "FDQNxgnKyW3ugAPJNipcA8jIplL0Jw8yD7j1dm3iViI",
 //   "weave_size" : "152674506940662",

@@ -3,12 +3,9 @@
 use arweave_randomx_rs::*;
 use arweave_types::{*,decode::DecodeHash};
 use consensus::RANDOMX_PACKING_KEY;
+use indexes::{block_index::*,block_index_scraper::request_block_index_jsons};
 use std::{fs::File, io::Read, time::Instant};
-use validator::{
-    compute_solution_hash, block_index::BlockIndex, block_index::Initialized,
-    block_index_scraper::current_block_height, block_index_scraper::request_block_index_jsons,
-    pre_validate_block,
-};
+use validator::pre_validate_block;
 use vdf::verify::*;
 use packing::{compute_randomx_hash_with_entropy, pack_chunk};
 use eyre::Result;
@@ -17,6 +14,7 @@ use openssl::hash;
 use paris::Logger;
 
 mod arweave_types;
+mod indexes;
 mod consensus;
 mod packing;
 mod validator;

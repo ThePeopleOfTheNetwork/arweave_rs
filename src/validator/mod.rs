@@ -1,16 +1,13 @@
 #![allow(dead_code)]
-use self::block_index::{BlockIndex, Initialized};
 use crate::{
     arweave_types::{H256,H384, ArweaveBlockHeader, PoaData, Base64, U256, DoubleSigningProof},
     packing::{feistel::feistel_decrypt, compute_entropy},
-    validator::merkle::validate_path, consensus::*,
+    validator::merkle::validate_path, consensus::*, indexes::block_index::*,
 };
 use arweave_randomx_rs::RandomXVM;
 use color_eyre::eyre::{eyre, Result};
 use openssl::sha;
 
-pub mod block_index;
-pub mod block_index_scraper;
 pub mod merkle;
 
 pub fn pre_validate_block(
