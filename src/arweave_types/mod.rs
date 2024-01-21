@@ -7,10 +7,12 @@ use serde_derive::Deserialize;
 use std::{ops::Index, slice::SliceIndex, str::FromStr};
 use uint::construct_uint;
 
-use self::decode::DecodeHash;
+/// Decodes hashes from `base64_url` encoded strings
 pub mod decode;
+use self::decode::DecodeHash;
 
 #[derive(Clone, Debug, Default, Deserialize)]
+/// Stores deserialized fields from `Arweave Block Header` JSON
 pub struct ArweaveBlockHeader {
     pub merkle_rebase_support_threshold: U256,
     pub chunk_hash: H256,
@@ -72,6 +74,7 @@ pub struct ArweaveBlockHeader {
 }
 
 #[derive(Default, Clone, Debug, Deserialize)]
+/// Stores deserialized fields from a `poa` (Proof of Access) JSON
 pub struct PoaData {
     pub option: String,
     pub tx_path: Base64,
@@ -80,6 +83,7 @@ pub struct PoaData {
 }
 
 #[derive(Default, Clone, Debug, Deserialize)]
+/// Stores deserialized fields from a `Double Signing Proof` JSON
 pub struct DoubleSigningProof {
     #[serde(default)]
     pub pub_key: Option<Base64>,
@@ -101,7 +105,7 @@ pub struct DoubleSigningProof {
     pub preimage2: Option<H256>,
 }
 
-/// NonceLImiterInput holds the nonce_limiter_info from the Arweave block header
+/// Stores the `nonce_limiter_info` in the [`ArweaveBlockHeader`]
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct NonceLimiterInfo {
     pub output: H256,
@@ -218,13 +222,18 @@ mod optional_hash {
 //------------------------------------------------------------------------------
 
 #[derive(Default, Debug, Clone, PartialEq)]
+/// A struct of [`u64`] which can be parsed from big-endian `base64_url` bytes
+/// 
+/// The nonce field in the [`ArweaveBlockHeader`] has distinct serialization
+/// rules. Arweave nonces range from 0-(`RECALL_RANGE_SIZE`/`DATA_CHUNK_SIZE`). 
+/// Today, this is a value is between `0-400`. 
+/// 
+/// Two bytes can store integer values between `0-511`. This is enough
+/// to store the  nonce range, when `base64_url` encoded these bytes result in a
+/// string of 1-3 characters of encoded data in the JSON.
 pub struct Nonce(pub u64);
 
-/// The nonce field in the ArweaveBlockHeader is unique. Arweave Nonces can
-/// range from 0-(RECALL_RANGE_SIZE/DATA_CHUNK_SIZE). Today this is a value
-/// is between 0-400. Two bytes can store values between 0-511. This is enough
-/// to store the  nonce range, when encoded to base64_url this encodes to a
-/// string of 1-3 bytes of base64_url_encoded data in the JSON.
+
 impl Nonce {
     fn to_encoded_bytes(&self) -> String {
         let bytes = self.0.to_be_bytes();
@@ -282,6 +291,7 @@ fn vec_to_u64_be(bytes: &Vec<u8>) -> Result<u64, &'static str> {
 //------------------------------------------------------------------------------
 
 #[derive(Default, Debug, Clone, PartialEq)]
+/// Stores deserialized values of the `usd_to_ar_rate` field in the [`ArweaveBlockHeader`]
 pub struct USDToARRate(pub [u64; 2]);
 
 impl Index<usize> for USDToARRate {
@@ -333,7 +343,7 @@ impl<'de> Deserialize<'de> for USDToARRate {
         Ok(USDToARRate([n1, n2]))
     }
 }
-    
+
 //==============================================================================
 // U256 Type
 //------------------------------------------------------------------------------
@@ -370,7 +380,7 @@ impl<'de> Deserialize<'de> for U256 {
 //------------------------------------------------------------------------------
 
 construct_fixed_hash! {
-    
+    /// A 256-bit hash type (32 bytes)
     pub struct H256(32);
 }
 
@@ -397,7 +407,7 @@ impl<'de> Deserialize<'de> for H256 {
         D: Deserializer<'de>,
     {
         let s: String = Deserialize::deserialize(deserializer)?;
-        DecodeHash::from(&s).map_err( D::Error::custom)
+        DecodeHash::from(&s).map_err(D::Error::custom)
     }
 }
 
@@ -405,6 +415,7 @@ impl<'de> Deserialize<'de> for H256 {
 // H384 Type
 //------------------------------------------------------------------------------
 construct_fixed_hash! {
+    /// A 384-bit hash type (48 bytes)
     pub struct H384(48);
 }
 
@@ -438,7 +449,7 @@ impl<'de> Deserialize<'de> for H384 {
 //==============================================================================
 // Base64 Type
 //------------------------------------------------------------------------------
-/// A struct of [`Vec<u8>`] used for all Base64Url encoded fields
+/// A struct of [`Vec<u8>`] used for all `base64_url` encoded fields
 
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct Base64(pub Vec<u8>);
@@ -513,7 +524,7 @@ impl<'de> Deserialize<'de> for Base64 {
 //==============================================================================
 // Base64List Type
 //------------------------------------------------------------------------------
-/// A struct of [`Vec<Base64>`] used for arrays/lists of Base64 elements
+/// A struct of [`Vec<Base64>`] used for lists of [`Base64`] encoded elements
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Base64List(pub Vec<Base64>);
 
@@ -542,7 +553,7 @@ impl<'de> Deserialize<'de> for Base64List {
 //==============================================================================
 // H256List Type
 //------------------------------------------------------------------------------
-/// A struct of [`Vec<H256>`] used for arrays/lists of Base64 encoded hashes
+/// A struct of [`Vec<H256>`] used for lists of [`Base64`] encoded hashes
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct H256List(pub Vec<H256>);
 
