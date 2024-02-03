@@ -38,7 +38,7 @@ fn get_vdf_difficulty(nonce_info: &NonceLimiterInfo) -> usize {
 /// entropy. First it SHA256 hashes the `reset_seed` then SHA256 hashes the
 /// output together with the `seed` hash.
 ///
-/// /// # Arguments
+/// # Arguments
 ///
 /// * `seed` - The bytes of a SHA256 checkpoint hash
 /// * `reset_seed` - The bytes of a SHA384 block hash used as entropy
@@ -69,12 +69,12 @@ pub fn apply_reset_seed(seed: H256, reset_seed: H384) -> H256 {
 ///
 /// * `salt` - VDF checkpoints are salted with an auto incrementing salt counter.
 /// * `seed` - Initial seed (often the output of a previous checkpoint).
-/// * `checkpoint_count` - Can be used to calculate more than one checkpoint in sequence.
+/// * `num_checkpoints` - Can be used to calculate more than one checkpoint in sequence.
 /// * `num_iterations` - The number of times to sequentially SHA256 hash between checkpoints.
 ///
 /// # Returns
 ///
-/// - `Vec<[u8;32]>` A Vec containing the calculated checkpoint hashes `checkpoint_count` in length.
+/// - `Vec<[u8;32]>` A Vec containing the calculated checkpoint hashes `num_checkpoints` in length.
 pub fn vdf_sha2(
     salt: U256,
     seed: H256,
@@ -131,7 +131,7 @@ pub fn vdf_sha2(
 ///
 /// # Returns
 ///
-/// - `bool` - `true` if the checkpoints are valid, false otherwise.
+/// - `bool` - `true` if the checkpoints are valid, `false` otherwise.
 pub fn last_step_checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
     let num_iterations = get_vdf_difficulty(nonce_info);
     let global_step_number: usize = nonce_info.global_step_number as usize;
@@ -169,7 +169,7 @@ pub fn last_step_checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
     let is_valid =  test == nonce_info.last_step_checkpoints;
 
     if !is_valid {
-        // Compare the original list with the calculated one
+        // Compare the blocks list with the calculated one, looking for mismatches
         let mismatches: Vec<(usize, &H256, &H256)> = nonce_info
             .last_step_checkpoints
             .iter()
@@ -218,17 +218,17 @@ pub fn checkpoints_is_valid(nonce_info: &NonceLimiterInfo) -> bool {
     let steps = step_hashes.clone();
     let steps_since_reset = get_vdf_steps_since_reset(nonce_info.global_step_number);
      // -2 here because we need the step before the reset (-1), and -1 because 
-     // we pushed previous_seed to step_hashes making it one longer.
+     // we pushed previous_seed to step_hashes making steps.len() one longer.
      // We use i64 intentionally because the steps_since_reset may be larger
-     // than steps.len() and a negative reset_index will not match any of our steps
+     // than steps.len() and a negative reset_index will not match any of the steps
     let reset_index:i64 = steps.len() as i64 - steps_since_reset as i64 - 2;
 
     // Calculate the step number of the first step in the blocks sequence
     let start_step_number = nonce_info.global_step_number as usize - nonce_info.checkpoints.len();
 
-    // We must calculate the checkpoint iterations sequentially because we only 
-    // have the first and last checkpoint of each step, but we can do the steps
-    // in parallel
+    // We must calculate the checkpoint iterations for each step sequentially 
+    // because we only have the first and last checkpoint of each step, but we 
+    // can calculate ach of the steps in parallel
     let mut test: Vec<H256> = (0..steps.len() - 1)
         .into_par_iter()
         .map(|i| {
