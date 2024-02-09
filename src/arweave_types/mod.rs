@@ -1,3 +1,8 @@
+//! `arweave_rs` has a common set of types used across all of its modules.
+//!
+//! This module implements a single location where these types are managed,
+//! making them easy to reference and maintain.
+
 #![allow(clippy::assign_op_pattern)]
 #![allow(clippy::non_canonical_clone_impl)]
 use eyre::Error;
@@ -12,65 +17,209 @@ pub mod decode;
 use self::decode::DecodeHash;
 
 #[derive(Clone, Debug, Default, Deserialize)]
-/// Stores deserialized fields from `Arweave Block Header` JSON
+/// Stores deserialized fields from an `Arweave Block Header` JSON
 pub struct ArweaveBlockHeader {
-    pub merkle_rebase_support_threshold: U256,
-    pub chunk_hash: H256,
-    pub block_time_history_hash: H256,
-    pub hash_preimage: H256,
-    #[serde(with = "stringify")]
-    pub recall_byte: u64,
-    #[serde(with = "stringify")]
-    pub reward: u64,
-    pub previous_solution_hash: H256,
-    pub partition_number: u64,
-    pub nonce_limiter_info: NonceLimiterInfo,
-    pub poa2: PoaData,
-    pub signature: Base64,
-    pub reward_key: Base64,
-    pub price_per_gib_minute: U256,
-    pub scheduled_price_per_gib_minute: U256,
-    pub reward_history_hash: H256,
-    pub debt_supply: U256,
-    pub kryder_plus_rate_multiplier: U256,
-    pub kryder_plus_rate_multiplier_latch: U256,
-    pub denomination: U256,
-    pub redenomination_height: u64,
-    pub previous_block: H384,
-    pub timestamp: u64,
-    pub last_retarget: u64,
-    #[serde(default)]
-    pub recall_byte2: Option<U256>,
-    #[serde(default, with = "optional_hash")]
-    pub chunk2_hash: Option<H256>,
-    pub hash: H256,
-    pub diff: U256,
-    pub height: u64,
-    pub indep_hash: H384,
-    pub txs: Base64List,
-    pub tags: Base64List,
-    pub nonce: Nonce,
-    #[serde(default, with = "optional_hash")]
-    pub tx_root: Option<H256>,
-    pub wallet_list: H384,
-    pub reward_addr: H256,
-    #[serde(with = "stringify")]
-    pub reward_pool: u64,
-    #[serde(with = "stringify")]
-    pub weave_size: u64,
+    /// The number of bytes added to the Arweave dataset by this block.
     #[serde(with = "stringify")]
     pub block_size: u64,
+
+    /// `SHA-256` hash of the block_time_history log.
+    pub block_time_history_hash: H256,
+
+    /// If the block was produced with a `poa2` proof it will optionally include
+    /// this field. Its value is the `SHA-256` hash of the `poa2` chunks bytes.
+    #[serde(default, with = "optional_hash")]
+    pub chunk2_hash: Option<H256>,
+
+    /// `SHA-256` hash of the first PoA chunks (unencoded) bytes.
+    pub chunk_hash: H256,
+
+    /// The sum of the average number of hashes computed by the network to
+    /// produce the past blocks including this one.
     pub cumulative_diff: U256,
+
+    /// The total number of Winston emitted when the endowment was not
+    /// sufficient to compensate mining.
+    pub debt_supply: U256,
+    pub denomination: U256,
+
+    /// Difficulty threshold used to produce the current block.
+    pub diff: U256,
+
+    /// The proof of signing the same block several times or extending two equal forks.
     pub double_signing_proof: DoubleSigningProof,
-    pub previous_cumulative_diff: U256,
-    pub usd_to_ar_rate: USDToARRate,
-    pub scheduled_usd_to_ar_rate: USDToARRate,
+
+    /// The solution hash for the block
+    pub hash: H256,
+
+    /// The Merkle root of the block index - the list of {`indep_hash`,
+    /// `weave_size`, `tx_root`} triplets describing the past blocks excluding
+    /// this one.
+    pub hash_list_merkle: H384,
+
+    /// A performance optimization for block validation.
+    ///
+    /// For a block to be valid its produce must have calculated a
+    /// `solution_hash` that exceeds the difficulty setting of the network
+    /// (indicated by the `diff` field in this struct). That `solution_hash` is
+    /// a `SHA-256` hash of the combination of the `mining_hash` (named `H0` in
+    /// the erlang reference implementation) and the `hash_preimage`.
+    ///
+    /// If the block includes both `poa` and `poa2` proof data the
+    /// `hash_preimage` will be the hash of `poa2` chunk, otherwise it will be
+    /// the hash of the `poa` chunk.
+    /// This allows the initial Proof-of-Work validation to be done on a block
+    /// header without having to load the `poa` (or possibly `poa2`) chunks
+    /// bytes into memory and hash them.
+    ///
+    /// Used for initial solution validation without a poa data chunk.
+    pub hash_preimage: H256,
+
+    /// The block height.
+    pub height: u64,
+
+    /// The block identifier.
+    pub indep_hash: H384,
+
+    /// An additional multiplier for the transaction fees doubled every time the
+    /// endowment pool becomes empty.
+    pub kryder_plus_rate_multiplier: U256,
+
+    /// A lock controlling the updates of kryder_plus_rate_multiplier. It is set
+    /// to 1 after the update and back to 0 when the endowment pool is bigger
+    /// than RESET_KRYDER_PLUS_LATCH_THRESHOLD (redenominated according to the
+    /// denomination used at the time).
+    pub kryder_plus_rate_multiplier_latch: U256,
+
+    /// Unix timestamp of the last difficulty adjustment
+    pub last_retarget: u64,
+
+    /// Chunk index (weave offset) at which merkle_rebase_support is enabled.
+    pub merkle_rebase_support_threshold: U256,
+
+    /// The nonce used to produce the blocks solution_hash.
+    pub nonce: Nonce,
+
+    /// Nonce limiter / VDF info for this block.
+    pub nonce_limiter_info: NonceLimiterInfo,
+
+    /// Was used to allow a gradient transition to "packed chunks" in the v2.5
+    /// upgrade. Today the threshold has reached 0 and all weave data is stored
+    /// in chunks.
     #[serde(with = "stringify")]
     pub packing_2_5_threshold: u64,
+
+    /// The partition number used with the `VDF` output to determine the recall
+    /// ranges for `poa` and `poa2`.
+    pub partition_number: u64,
+
+    /// The first proof of access
+    pub poa: PoaData,
+
+    /// The second proof of access (empty when the solution was found with only
+    /// one chunk).
+    pub poa2: PoaData,
+
+    pub previous_block: H384,
+    pub previous_cumulative_diff: U256,
+    /// The solution hash of the previous block in the chain.
+    pub previous_solution_hash: H256,
+
+    /// The estimated number of Winstons it costs the network to store one 
+    /// gigabyte for one minute.
+    pub price_per_gib_minute: U256,
+
+    /// This field is awkwardly named, perhaps a holdover from older versions of
+    /// consensus pre Arweave 2.5. It contains the index of the chunk used in
+    /// the block solution (offset from the beginning of the weave). The
+    /// `recall_byte` value must indicate a chunk index from either `poa2` or
+    /// `poa`'s recall range.
+    #[serde(with = "stringify")]
+    pub recall_byte: u64,
+
+    /// Absolute offset of the second recall offset
+    #[serde(default)]
+    pub recall_byte2: Option<U256>,
+
+    /// The largest known redenomination height (0 means there were no 
+    /// redenominations yet).
+    pub redenomination_height: u64,
+
+    /// The block reward in Winstons. The smallest unit of Arweave.
+    #[serde(with = "stringify")]
+    pub reward: u64,
+
+    /// Address of the miner claiming the block reward, also used in validation
+    /// of the poa and poa2 chunks as the packing key. 
+    pub reward_addr: H256,
+
+    /// The recursive hash of the network hash rates, block rewards, and mining 
+    /// addresses of the latest ?REWARD_HISTORY_BLOCKS blocks.
+    pub reward_history_hash: H256,
+    
+    /// {KeyType, PubKey} - the public key the block was signed with. The only 
+    /// supported KeyType is currently {rsa, 65537}.
+    pub reward_key: Base64,
+    
+    /// The number of Winston in the endowment pool.
+    #[serde(with = "stringify")]
+    pub reward_pool: u64,
+
+    /// The updated estimation of the number of Winstons it costs the network to 
+    /// store one gigabyte for one minute.
+    pub scheduled_price_per_gib_minute: U256,
+
+    /// The estimated USD to AR conversion rate scheduled to be used a bit 
+    /// later, used to compute the necessary fee for the currently signed txs. 
+    /// A tuple {Dividend, Divisor}. Used until the transition to dynamic 
+    /// pricing is complete.
+    pub scheduled_usd_to_ar_rate: USDToARRate,
+
+    /// The block signature
+    pub signature: Base64,
+
+    /// The offset on the weave separating the data which has to be split 
+    /// according to the stricter rules introduced in the fork 2.5 from the 
+    /// historical data. The new rules require all chunk sizes to be 256 KiB 
+    /// excluding the last or the only chunks of the corresponding transactions
+    ///  and the second last chunks of their transactions where they exceed 256 
+    /// KiB in size when combined with the following (last) chunk. Furthermore,
+    /// the new chunks may not be smaller than their Merkle proofs unless they
+    ///  are the last chunks. The motivation is to be able to put all chunks 
+    /// into 256 KiB buckets. It makes all chunks equally attractive because 
+    /// they have equal chances of being chosen as recall chunks. Moreover, 
+    /// every chunk costs the same in terms of storage and computation 
+    /// expenditure when packed (smaller chunks are simply padded before 
+    /// packing).
     #[serde(with = "stringify")]
     pub strict_data_split_threshold: u64,
-    pub hash_list_merkle: H384,
-    pub poa: PoaData,
+
+    /// A list of arbitrary key-value pairs. Keys and values are binaries.
+    pub tags: Base64List,
+
+    /// Unix timestamp of when the block was discovered/produced
+    pub timestamp: u64,
+
+    /// The Merkle root of the tree who's leaves are the data_roots of each of
+    /// the transactions in the block.
+    #[serde(default, with = "optional_hash")]
+    pub tx_root: Option<H256>,
+
+    /// List of transaction ids included in the block
+    pub txs: Base64List,
+
+    /// The estimated USD to AR conversion rate used in the pricing calculations.
+	/// A tuple {Dividend, Divisor} (representing a fraction Dividend/Divisor)
+	/// Used until the transition to dynamic pricing is complete.
+    pub usd_to_ar_rate: USDToARRate,
+
+    /// The root hash of the Merkle Patricia Tree containing all wallet (account)
+    /// balances and the identifiers of the last transactions posted by them.
+    pub wallet_list: H384,
+
+    /// The total number of bytes in the weave dataset at this block height.
+    #[serde(with = "stringify")]
+    pub weave_size: u64,
 }
 
 #[derive(Default, Clone, Debug, Deserialize)]
@@ -223,16 +372,15 @@ mod optional_hash {
 
 #[derive(Default, Debug, Clone, PartialEq)]
 /// A struct of [`u64`] which can be parsed from big-endian `base64_url` bytes
-/// 
+///
 /// The nonce field in the [`ArweaveBlockHeader`] has distinct serialization
-/// rules. Arweave nonces range from 0-(`RECALL_RANGE_SIZE`/`DATA_CHUNK_SIZE`). 
-/// Today, this is a value is between `0-400`. 
-/// 
+/// rules. Arweave nonces range from 0-(`RECALL_RANGE_SIZE`/`DATA_CHUNK_SIZE`).
+/// Today, this is a value is between `0-400`.
+///
 /// Two bytes can store integer values between `0-511`. This is enough
 /// to store the  nonce range, when `base64_url` encoded these bytes result in a
 /// string of 1-3 characters of encoded data in the JSON.
 pub struct Nonce(pub u64);
-
 
 impl Nonce {
     fn to_encoded_bytes(&self) -> String {
