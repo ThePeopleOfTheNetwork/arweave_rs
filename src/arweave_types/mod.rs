@@ -1,4 +1,4 @@
-//! `arweave_rs` has a common set of types used across all of its modules.
+//! Contains a common set of types used across all of the `arweave_rs` modules.
 //!
 //! This module implements a single location where these types are managed,
 //! making them easy to reference and maintain.
@@ -17,7 +17,7 @@ pub mod decode;
 use self::decode::DecodeHash;
 
 #[derive(Clone, Debug, Default, Deserialize)]
-/// Stores deserialized fields from an `Arweave Block Header` JSON
+/// Stores deserialized fields from a JSON formatted Arweave block header.
 pub struct ArweaveBlockHeader {
     /// The number of bytes added to the Arweave dataset by this block.
     #[serde(with = "stringify")]
