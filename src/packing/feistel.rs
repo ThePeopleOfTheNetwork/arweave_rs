@@ -1,10 +1,12 @@
+//! Decryption methods for separating the original chunk data from the randomX
+//! entropy using a feistel block cypher.
 use openssl::sha;
 
 const FEISTEL_BLOCK_LENGTH: usize = 32;
 
-/// Takes a `right]` and `key` arrays of bytes, takes the first 32 bytes of each
-/// and SHA-256 hashes them combined 64 bytes together, returning the hash
-pub fn feistel_hash(right: &[u8], key: &[u8]) -> [u8; 32] {
+/// Takes `right` and `key` arrays of bytes, takes the first 32 bytes of each
+/// and SHA-256 hashes the combined 64 bytes together, returning the hash.
+fn feistel_hash(right: &[u8], key: &[u8]) -> [u8; 32] {
     // Use only the first FEISTEL_BLOCK_LENGTH bytes of right and key
     let right_slice: &[u8; FEISTEL_BLOCK_LENGTH] = &right[..FEISTEL_BLOCK_LENGTH.min(right.len())]
         .try_into()
@@ -21,9 +23,9 @@ pub fn feistel_hash(right: &[u8], key: &[u8]) -> [u8; 32] {
     hasher.finish()
 }
 
-/// Takes the left and right feistel blocks and uses the key to decrypt them,
-/// returning the decrypted left and right block
-pub fn feistel_decrypt_block(
+/// Takes the `left` and `right` feistel blocks and uses the `key` to decrypt
+///  them, returning the decrypted left and right blocks
+fn feistel_decrypt_block(
     in_left: &[u8],
     in_right: &[u8],
     in_key: &[u8],

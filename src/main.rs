@@ -1,30 +1,30 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 use arweave_randomx_rs::*;
-use arweave_types::{*,decode::DecodeHash};
+use arweave_types::{decode::DecodeHash, *};
 use consensus::RANDOMX_PACKING_KEY;
+use eyre::Result;
 use indexes::{block_index::*, Initialized};
+use lazy_static::lazy_static;
+use openssl::hash;
+use packing::compute_entropy;
+use paris::Logger;
 use std::{fs::File, io::Read, time::Instant};
 use validator::pre_validate_block;
 use vdf::verify::*;
-use packing::{compute_randomx_hash_with_entropy, pack_chunk};
-use eyre::Result;
-use lazy_static::lazy_static;
-use openssl::hash;
-use paris::Logger;
 
 use crate::indexes::BlockIndex;
 
 mod arweave_types;
-mod indexes;
 mod consensus;
+mod indexes;
 mod packing;
 mod validator;
 mod vdf;
 
 //#[derive(Default, Clone)]
 struct TestContext {
-    pub block_index:BlockIndex<Initialized>,
+    pub block_index: BlockIndex<Initialized>,
     pub base_case: Vec<NonceLimiterInfo>,
     pub reset_case: Vec<NonceLimiterInfo>,
     pub reset_first_case: Vec<NonceLimiterInfo>,
@@ -232,17 +232,12 @@ fn main() -> Result<()> {
     //     &mut logger,
     // );
 
-    //run_test(test_pack_chunk, "test_pack_chunk", &mut logger);
     // run_test(test_validator_init, "test_validator_init", &mut logger);
     // run_test(test_validator_index_jsons, "test_validator_index_jsons", &mut logger);
     run_test(test_pre_validation, "test_pre_validation", &mut logger);
 
     // run_test(test_randomx_hash, "test_randomx_hash", &mut logger);
-    // run_test(
-    //     test_randomx_hash_with_entropy,
-    //     "test_randomx_hash_with_entropy",
-    //     &mut logger,
-    // );
+    // run_test(test_randomx_entropy, "test_randomx_entropy", &mut logger);
 
     Ok(())
 }
@@ -281,7 +276,7 @@ fn test_randomx_hash() -> bool {
     true
 }
 
-fn test_randomx_hash_with_entropy() -> bool {
+fn test_randomx_entropy() -> bool {
     // Nonce = ar_util:decode(?ENCODED_NONCE),
     // Segment = ar_util:decode(?ENCODED_SEGMENT),
     // Input = << Nonce/binary, Segment/binary >>,
@@ -314,8 +309,7 @@ fn test_randomx_hash_with_entropy() -> bool {
 
     let randomx_program_count = 8;
 
-    let (_hash, entropy) =
-        compute_randomx_hash_with_entropy(&input, randomx_program_count, Some(&randomx_vm));
+    let entropy = compute_entropy(&input, randomx_program_count, Some(&randomx_vm));
 
     // Slice the first 32 bytes (256 bits)
     let first_256_bits = &entropy[0..32];
@@ -382,14 +376,6 @@ fn test_validator_init() -> bool {
 //     println!("{result:?}");
 //     true
 // }
-
-fn test_pack_chunk() -> bool {
-    let (block_header, _) = &TEST_DATA.packing_case;
-    let reward_address = block_header.reward_addr;
-    let tx_root = block_header.tx_root.unwrap();
-    let chunk = pack_chunk(U256::from(0), &reward_address, &tx_root);
-    !chunk.is_empty()
-}
 
 fn test_last_step_checkpoints_base() -> bool {
     let base_infos = &TEST_DATA.base_case;
