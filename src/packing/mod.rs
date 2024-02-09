@@ -1,4 +1,4 @@
-//! RandomX entropy and feistel decryption cypher for unpacking Arweave data.
+//! RandomX entropy generation and feistel decryption cypher for unpacking Arweave data.
 #![allow(dead_code)]
 use crate::{arweave_types::*, consensus::*};
 use arweave_randomx_rs::{create_randomx_vm, RandomXCache, RandomXFlag, RandomXMode, RandomXVM};

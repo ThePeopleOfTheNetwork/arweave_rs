@@ -1,3 +1,4 @@
+//! Verify VDF checkpoints in parallel across multiple cores.
 #![allow(dead_code)]
 use rayon::prelude::*;
 use openssl::sha;

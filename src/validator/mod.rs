@@ -1,3 +1,5 @@
+//! Validates all of the Arweave block header fields follow Arweave consensus
+//! rules.
 #![allow(dead_code)]
 use crate::{
     arweave_types::{H256,H384, ArweaveBlockHeader, PoaData, Base64, U256, DoubleSigningProof},
@@ -10,6 +12,10 @@ use openssl::sha;
 
 pub mod merkle;
 
+/// Sequentially performs all of the checks required to validate an Arweave 
+/// block starting with the simplest (least expensive) checks and finishing with
+/// the most involved checks. Note: This excludes the VDF checkpoint validation
+/// which is performed separately.
 pub fn pre_validate_block(
     block_header: &ArweaveBlockHeader,
     previous_block_header: &ArweaveBlockHeader,
@@ -151,7 +157,7 @@ pub fn pre_validate_block(
     Ok(solution_hash)
 }
 
-pub fn compute_solution_hash(mining_hash: &[u8; 32], hash_preimage: &H256) -> [u8; 32] {
+fn compute_solution_hash(mining_hash: &[u8; 32], hash_preimage: &H256) -> [u8; 32] {
     let mut hasher = sha::Sha256::new();
     hasher.update(mining_hash);
     hasher.update(hash_preimage.as_bytes());

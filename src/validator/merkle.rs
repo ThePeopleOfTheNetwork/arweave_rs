@@ -1,3 +1,5 @@
+//! Validates merkle tree proofs for the `Proof of Access` chunks in an Arweave
+//! block header.
 use borsh::BorshDeserialize;
 use borsh_derive::BorshDeserialize;
 use color_eyre::eyre::eyre;
@@ -167,6 +169,7 @@ pub fn validate_path(
     })
 }
 
+/// Utility method for logging a proof out to the terminal.
 pub fn print_debug(proof: &Vec<u8>, target_offset: u128) -> Result<([u8; 32], u128, u128), Error> {
     // Split proof into branches and leaf. Leaf is at the end and branches are
     // ordered from root to leaf.

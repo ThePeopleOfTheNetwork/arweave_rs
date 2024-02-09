@@ -1,7 +1,5 @@
-//! In order to validate blocks `arweave_rs` caches state about the blockchain
-//! in various indexes. This module contains the implementation of those
-//! indexes and in some cases the modules that initialize them from the Arweave
-//! peers.
+//! Implementation of indexes for caching network state (and the modules that 
+//! initialize them from the Arweave peers).
 use std::sync::Arc;
 use self::block_index::BlockIndexItem;
 
