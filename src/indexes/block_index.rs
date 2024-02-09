@@ -1,3 +1,5 @@
+//! Manages a list of `{block_hash, weave_size, tx_root}`entries, indexed by 
+//! block height.
 use color_eyre::eyre::{eyre, Result};
 use std::fs::{File, OpenOptions, self};
 use std::io::{self, Read, Seek, SeekFrom, Write};

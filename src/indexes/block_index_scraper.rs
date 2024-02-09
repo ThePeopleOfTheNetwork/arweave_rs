@@ -1,3 +1,5 @@
+//! Populates the `BlockIndex` from an arweave peer using the `/block_index`
+//! endpoint.
 use color_eyre::eyre::eyre;
 use eyre::{Report, Result};
 use futures::future::try_join_all;
@@ -14,6 +16,8 @@ use crate::arweave_types::ArweaveBlockHeader;
 //   "hash" : "rRJ-5cTFVeTxtQDlTJgITpnDFfU58Fi2WYy4jNvBY7xQPK9HpgrEdacpUj1HbHAh"
 // }
 
+/// Stores the deserialized JSON block index data returned by the the peers
+/// `/block_index/<start_height>/<end_height>` endpoint.
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct BlockIndexJson {
     pub tx_root: String,
@@ -21,6 +25,8 @@ pub struct BlockIndexJson {
     pub hash: String,
 }
 
+/// The primary worker function for retrieving Block Indexes from the Arweave
+/// network.
 pub async fn request_indexes(
     node_url: &str,
     start_block_heights: &[(u64, u64)],
@@ -40,7 +46,9 @@ pub async fn request_indexes(
     }
 }
 
-pub async fn request_block_index_jsons(
+/// Request the block index data from the peer. Support a `max_retries` count
+///  with a delay between retry attempts for each block index page.
+async fn request_block_index_jsons(
     node_url: &str,
     start_block_height: u64,
     end_block_height: u64,
@@ -75,7 +83,7 @@ pub async fn request_block_index_jsons(
                 retry_count += 1;
             }
             Err(err) => {
-                // error trying to connect: dns error: failed to lookup address information: nodename nor servname provided, or not known
+                // error trying to connect: dns error: failed to lookup address information: nodename nor servername provided, or not known
                 println!("Request to {} failed with error: {}", url, err);
                 retry_count += 1;
                 last_error = Some(eyre!(err));
@@ -98,18 +106,22 @@ pub async fn request_block_index_jsons(
     }
 }
 
+/// Synchronously get the current block height from <https://https://arweave.net/block/current>.
 pub fn current_block_height() -> u64 {
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let result = runtime.block_on(current_block_header()).unwrap();
     result.height
 }
 
+/// Asynchronously get the current block height from <https://https://arweave.net/block/current>.
 pub async fn current_block_height_async() -> u64 {
     let result = current_block_header().await.unwrap();
     result.height
 }
 
-pub async fn current_block_header() -> Result<ArweaveBlockHeader> {
+/// Get the current block header from <https://https://arweave.net/block/current> 
+/// TODO: Make this configurable so that it can pull from any peer.
+async fn current_block_header() -> Result<ArweaveBlockHeader> {
     // Use reqwest to query the current block header data
     let client = ReqwestClient::new();
     let url = format!("https://arweave.net/block/{}", "current");
