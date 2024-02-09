@@ -3,7 +3,7 @@
 use arweave_randomx_rs::*;
 use arweave_types::{*,decode::DecodeHash};
 use consensus::RANDOMX_PACKING_KEY;
-use indexes::{block_index::*,block_index_scraper::request_block_index_jsons, Initialized};
+use indexes::{block_index::*, Initialized};
 use std::{fs::File, io::Read, time::Instant};
 use validator::pre_validate_block;
 use vdf::verify::*;
@@ -367,20 +367,21 @@ fn test_validator_init() -> bool {
     true
 }
 
-fn test_validator_index_jsons() -> bool {
-    let client = reqwest::Client::new();
-    let runtime = tokio::runtime::Runtime::new().unwrap();
-    let result = runtime
-        .block_on(request_block_index_jsons(
-            "http://188.166.200.45:1984",
-            1288400u64,
-            1288509u64,
-            &client,
-        ))
-        .unwrap();
-    println!("{result:?}");
-    true
-}
+/// TODO: Move this test into the indexes module where it has access to `request_block_index_jsons`
+// fn test_validator_index_jsons() -> bool {
+//     let client = reqwest::Client::new();
+//     let runtime = tokio::runtime::Runtime::new().unwrap();
+//     let result = runtime
+//         .block_on(request_block_index_jsons(
+//             "http://188.166.200.45:1984",
+//             1288400u64,
+//             1288509u64,
+//             &client,
+//         ))
+//         .unwrap();
+//     println!("{result:?}");
+//     true
+// }
 
 fn test_pack_chunk() -> bool {
     let (block_header, _) = &TEST_DATA.packing_case;
