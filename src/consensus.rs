@@ -1,10 +1,11 @@
+//! Aggregates Arweave consensus related constants and computations.
 #![allow(dead_code)]
 use arweave_randomx_rs::*;
 use openssl::sha;
  
 use crate::arweave_types::*;
 
-//The key to initialize the RandomX state from, for RandomX packing.
+/// The key to initialize the RandomX state. Used for RandomX packing & hashing.
 pub const RANDOMX_PACKING_KEY: &[u8] = b"default arweave 2.5 pack key";
 // pub const RANDOMX_PACKING_ROUNDS_2_5: usize = 8*20;
 pub const RANDOMX_PACKING_ROUNDS_2_6: usize = 8 * 45;
@@ -115,6 +116,8 @@ pub fn get_vdf_steps_since_reset(global_step_number: u64) -> usize {
     (remainder * reset_interval).round() as usize
 }
 
+/// Return value of [`get_seed_data()`]. Contains the VDF seed 
+/// related fields of a [`NonceLimiterInfo`] struct.
 pub struct SeedData {
     pub seed: H384,
     pub next_seed: H384,
@@ -123,10 +126,11 @@ pub struct SeedData {
     pub vdf_difficulty: u64,
 }
 
-/// Gets the seed data for step_number, takes into account the reset step.
-/// Note: next_vdf_difficulty is not part of the seed data as it is computed
-/// using the block_time_history - which is a heavier operation handled separate
-/// from the (quick) seed data retrieval
+/// Gets the seed data for a [`NonceLimiterInfo`], it uses `step_number` to take
+/// into account the seed reset entropy step.
+/// Mining Note: `next_vdf_difficulty` is not part of the seed data as it is computed
+/// using the `block_time_history` - which is a heavier operation handled separate
+/// from the (quick) seed data retrieval.
 pub fn get_seed_data(step_number: u64, previous_block: &ArweaveBlockHeader) -> SeedData {
     let previous_info = &previous_block.nonce_limiter_info;
 
@@ -159,8 +163,8 @@ pub fn get_seed_data(step_number: u64, previous_block: &ArweaveBlockHeader) -> S
     }
 }
 
-/// The reference erlang implementation refers to this as ar_block:compute_h0
-/// In the erlang reference implementation this hash is known as H0
+/// The reference erlang implementation refers to this as `ar_block:compute_h0`
+/// In the erlang reference implementation this hash is known as `H0`.
 pub fn compute_mining_hash(
     vdf_output: H256,
     partition_number: u32,
@@ -203,23 +207,23 @@ pub fn compute_mining_hash(
     hash_array
 }
 
-/// (ar_block.erl) Return {RecallRange1Start, RecallRange2Start} - the start offsets
-/// of the two recall ranges.
+/// Referenced from (ar_block.erl). Return `{RecallRange1Start, RecallRange2Start}`
+///  - the start offsets of the two recall ranges.
 pub fn get_recall_range(
-    h0: &[u8; 32],
+    mining_hash: &[u8; 32],
     partition_number: u64,
     partition_upper_bound: u64,
 ) -> (U256, U256) {
-    // Decode the first 8 bytes of H0 to an unsigned integer (big-endian)
+    // Decode the first 8 bytes of the mining_hash to an unsigned integer (big-endian)
     let recall_range1_offset =
-        u64::from_be_bytes(h0.get(0..8).unwrap_or(&[0; 8]).try_into().unwrap());
+        u64::from_be_bytes(mining_hash.get(0..8).unwrap_or(&[0; 8]).try_into().unwrap());
 
     // Calculate RecallRange1Start
     let recall_range1_start = partition_number * PARTITION_SIZE
         + recall_range1_offset % std::cmp::min(PARTITION_SIZE, partition_upper_bound);
 
-    // Decode the entire H0 to an unsigned integer (big-endian)
-    let recall_range2_start = U256::from_big_endian(h0) % U256::from(partition_upper_bound);
+    // Decode the entire mining_hash to an unsigned integer (big-endian)
+    let recall_range2_start = U256::from_big_endian(mining_hash) % U256::from(partition_upper_bound);
 
     (U256::from(recall_range1_start), recall_range2_start)
 }
