@@ -1,8 +1,8 @@
 //! Verify VDF checkpoints in parallel across multiple cores.
 #![allow(dead_code)]
+use arweave_rs_types::{consensus::*, *};
 use rayon::prelude::*;
 use openssl::sha;
-use crate::{consensus::*, arweave_types::{NonceLimiterInfo, H256, H384, U256}};
 
 // erlang consensus constants
 // ================================================

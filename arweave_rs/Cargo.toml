@@ -1,0 +1,24 @@
+[package]
+name = "arweave_rs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+arweave_rs_types = {path = "../types"}
+arweave_rs_indexes = {path = "../indexes"}
+arweave_rs_packing = {path = "../packing"}
+arweave_rs_validator = {path = "../validator"}
+arweave_rs_vdf = {path = "../vdf"}
+arweave_rs_randomx = { path = "../../arweave-randomx-rs" }
+base64-url = "2.0.0"
+eyre = "0.6.8"
+color-eyre = "0.6.2"
+lazy_static = "1.4.0"
+openssl = { version = "0.10.57", features = ["vendored"] }
+paris = "1.5.15"
+serde = "1.0.188"
+serde_derive = "1.0.188"
+serde_json = "1.0.107"
+tokio = { version = "1.9.0", features = ["full"] }

@@ -1,12 +1,13 @@
 //! Manages a list of `{block_hash, weave_size, tx_root}`entries, indexed by 
 //! block height.
+use arweave_rs_types::*;
+use arweave_rs_types::decode::*;
 use color_eyre::eyre::{eyre, Result};
 use std::fs::{File, OpenOptions, self};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::arweave_types::{decode::*, H384, H256};
 use super::{BlockIndex, Uninitialized, Initialized};
 use super::block_index_scraper::{current_block_height_async, request_indexes, BlockIndexJson};
 

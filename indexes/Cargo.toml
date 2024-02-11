@@ -1,0 +1,16 @@
+[package]
+name = "arweave_rs_indexes"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+arweave_rs_types = {path = "../types"}
+eyre = "0.6.8"
+color-eyre = "0.6.2"
+futures = "0.3"
+reqwest = { version = "0.11.18", default-features = false, features = ["rustls-tls","json"] }
+serde = "1.0.188"
+serde_derive = "1.0.188"
+tokio = { version = "1.9.0", features = ["full"] }
