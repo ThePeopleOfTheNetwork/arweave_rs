@@ -1,12 +1,12 @@
 //! Validates merkle tree proofs for the `Proof of Access` chunks in an Arweave
 //! block header.
+use arweave_rs_types::*;
 use borsh::BorshDeserialize;
 use borsh_derive::BorshDeserialize;
 use color_eyre::eyre::eyre;
 use eyre::Error;
 use openssl::sha;
 
-use crate::arweave_types::Base64;
 
 /// Single struct used for original data chunks (Leaves) and branch nodes (hashes of pairs of child nodes).
 #[derive(Debug, PartialEq, Clone)]

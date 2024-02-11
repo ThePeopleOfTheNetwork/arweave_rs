@@ -1,13 +1,12 @@
 //! Populates the `BlockIndex` from an arweave peer using the `/block_index`
 //! endpoint.
+use arweave_rs_types::*;
 use color_eyre::eyre::eyre;
 use eyre::{Report, Result};
 use futures::future::try_join_all;
 use reqwest::{header, Client as ReqwestClient, StatusCode};
 use serde_derive::{Deserialize, Serialize};
 use std::time::Duration;
-
-use crate::arweave_types::ArweaveBlockHeader;
 
 // This is the format of the JSON
 // {

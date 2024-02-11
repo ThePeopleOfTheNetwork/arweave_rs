@@ -1,9 +1,11 @@
 //! Aggregates Arweave consensus related constants and computations.
 #![allow(dead_code)]
-use arweave_randomx_rs::*;
+
+use arweave_rs_randomx::{RandomXVM, create_randomx_vm, RandomXMode};
 use openssl::sha;
+
+use crate::*;
  
-use crate::arweave_types::*;
 
 /// The key to initialize the RandomX state. Used for RandomX packing & hashing.
 pub const RANDOMX_PACKING_KEY: &[u8] = b"default arweave 2.5 pack key";

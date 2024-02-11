@@ -14,6 +14,7 @@ use uint::construct_uint;
 
 /// Decodes hashes from `base64_url` encoded strings
 pub mod decode;
+pub mod consensus;
 use self::decode::DecodeHash;
 
 #[derive(Clone, Debug, Default, Deserialize)]

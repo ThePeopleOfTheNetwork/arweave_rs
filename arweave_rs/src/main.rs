@@ -1,26 +1,18 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
-use arweave_randomx_rs::*;
-use arweave_types::{decode::DecodeHash, *};
+use arweave_rs_randomx::*;
+use arweave_rs_types::{decode::DecodeHash, *};
 use consensus::RANDOMX_PACKING_KEY;
 use eyre::Result;
-use indexes::{block_index::*, Initialized};
+use arweave_rs_indexes::{block_index::*, Initialized, BlockIndex};
+use arweave_rs_vdf::verify::*;
 use lazy_static::lazy_static;
 use openssl::hash;
-use packing::compute_entropy;
+use arweave_rs_packing::compute_entropy;
 use paris::Logger;
 use std::{fs::File, io::Read, time::Instant};
-use validator::pre_validate_block;
-use vdf::verify::*;
+use arweave_rs_validator::pre_validate_block;
 
-use crate::indexes::BlockIndex;
-
-mod arweave_types;
-mod consensus;
-mod indexes;
-mod packing;
-mod validator;
-mod vdf;
 
 //#[derive(Default, Clone)]
 struct TestContext {
