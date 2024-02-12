@@ -1,0 +1,1 @@
+Binary project that scrapes block headers from an Arweave peer and validates them with Arweaves' consensus rules.
