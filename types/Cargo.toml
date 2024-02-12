@@ -15,4 +15,4 @@ base64-url = "2.0.0"
 fixed-hash = "0.8.0"
 uint = "0.9.5"
 openssl = { version = "0.10.57", features = ["vendored"] }
-arweave_rs_randomx = { path = "../../arweave-randomx-rs" }
+arweave_rs_randomx = { path = "../randomx" }

@@ -1,0 +1,3 @@
+[submodule "randomx"]
+	path = randomx
+	url = git@github.com:ThePeopleOfTheNetwork/arweave-rs-randomx.git

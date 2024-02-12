@@ -13,7 +13,7 @@ arweave_rs_packing = {path = "../packing"}
 openssl = { version = "0.10.57", features = ["vendored"] }
 eyre = "0.6.8"
 color-eyre = "0.6.2"
-arweave_rs_randomx = { path = "../../arweave-randomx-rs" }
+arweave_rs_randomx = { path = "../randomx" }
 borsh = "1.3.0"
 borsh-derive = "1.3.0"
 base64-url = "2.0.0"

@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 arweave_rs_types = {path = "../types"}
 openssl = { version = "0.10.57", features = ["vendored"] }
-arweave_rs_randomx = { path = "../../arweave-randomx-rs" }
+arweave_rs_randomx = { path = "../randomx" }

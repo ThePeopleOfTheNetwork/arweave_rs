@@ -13,7 +13,6 @@ use paris::Logger;
 use std::{fs::File, io::Read, time::Instant};
 use arweave_rs_validator::pre_validate_block;
 
-
 //#[derive(Default, Clone)]
 struct TestContext {
     pub block_index: BlockIndex<Initialized>,
