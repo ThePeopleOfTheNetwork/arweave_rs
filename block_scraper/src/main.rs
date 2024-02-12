@@ -6,7 +6,7 @@ use color_eyre::eyre::eyre;
 use eyre::{Report, Result};
 use futures::future::try_join_all;
 use reqwest::{Client as ReqwestClient, StatusCode};
-use std::time::{Duration, Instant};
+use std::{time::{Duration, Instant}, io::{self, Write}};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -53,80 +53,39 @@ async fn main() -> Result<()> {
     let end_vm = start_vm.elapsed();
     println!("RandomX VM initialization: {:?}", end_vm);
 
-    // Create a batch of block header heights to request...
-    let mut batch: Vec<u64> = vec![];
     let batch_size = 100;
-    let start_block_height = current_block_height - 100;
+    let mut end_height = current_block_height;
+    process_block_header_batch(&block_index, &vm, batch_size, end_height).await?;
 
-    for index in (start_block_height..current_block_height).rev() {
-        let block_height = index;
+    let mut should_continue = true;
 
-        batch.push(block_height);
+    while should_continue {
+        println!("Validate the next 100 headers? [Y/n]:");
+        // Flush stdout to ensure the message is displayed before blocking for input
+        io::stdout().flush().unwrap();
 
-        // Is it time to make the batch request?
-        if batch.len() == batch_size || index == start_block_height {
-            // Await completion of the reqwest batch
-            let mut res = get_block_headers(&batch)
-                .await
-                .expect("all block headers to be retrieved and parsed");
-
-            // Sort the headers
-            res.sort_by_key(|bh| bh.height);
-            res.reverse();
-
-            for window in res.windows(2) {
-                let current = &window[0];
-                let previous = &window[1];
-
-                // Handle blocks that have both a previous and a next block
-                //println!("{}:{}", current.height, previous.height);
-
-                let start = Instant::now();
-                let solution_hash =
-                    pre_validate_block(current, previous, &block_index, Some(&vm)).unwrap();
-                let duration = start.elapsed(); // Get the elapsed time
-
-                let encoded = base64_url::encode(&solution_hash);
-
-                let encoded2 = base64_url::encode(&current.hash);
-
-                if encoded == encoded2 {
-                    println!("✅{} {} {:?}", current.height, encoded, duration);
-                } else {
-                    println!(
-                        "❌{} {} {} {:?}",
-                        current.height, encoded, encoded2, duration
-                    );
+        let mut input = String::new();
+        match io::stdin().read_line(&mut input) {
+            Ok(_) => {
+                
+                match input.trim().to_uppercase().as_str() {
+                    "" => {
+                        should_continue = true;
+                    },
+                    "Y" => {
+                        should_continue = true;
+                    }
+                    _ => {
+                        should_continue = false;
+                    }
                 }
-            }
-
-            // TODO: Inspect the results to find blocks where the entropy reset happens on the first or last step
-            // #[allow(unused_variables)]
-            // for header in res {
-            // The first step of the next block is a reset
-            // let remainder = (header.nonce_limiter_info.global_step_number + 1) as f64 / NONCE_LIMITER_RESET_FREQUENCY as f64;
-            // if remainder.fract() == 0.0 {
-            //     println!("next height is reset: {}", header.height);
-            // }
-
-            // let solution_hash = pre_validate_block(&header).unwrap();
-            // let encoded = base64_url::encode(&solution_hash);
-
-            // if encoded == header.hash {
-            //     println!("✅{} {}", header.height, encoded);
-            // } else {
-            //     println!("❌{} {} {}", header.height, encoded, header.hash);
-            // }
-            // }
-
-            println!(
-                "✅ Finished loading headers! {}/{}!",
-                batch.len(),
-                batch.len()
-            );
-  
-            // Reset the batch, we're going again.
-            batch.clear();
+            },
+            Err(error) => println!("Error reading from stdin: {}", error),
+        }
+        println!("should_continue: {should_continue}");
+        if should_continue {
+            end_height -= batch_size as u64 - 1;
+            process_block_header_batch(&block_index, &vm, batch_size, end_height).await?;
         }
     }
 
@@ -194,7 +153,7 @@ pub async fn process_block_header_batch(
             // }
 
             println!(
-                "✅ Finished loading headers! {}/{}!",
+                "✅ Finished validating headers! {}/{}!",
                 batch.len(),
                 batch.len()
             );
