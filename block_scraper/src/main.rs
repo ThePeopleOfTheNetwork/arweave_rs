@@ -1,12 +1,12 @@
-use std::time::{Duration, Instant};
-use arweave_rs_randomx::{create_randomx_vm, RandomXMode};
-use arweave_rs_types::{*, consensus::*};
+use arweave_rs_indexes::*;
+use arweave_rs_randomx::{create_randomx_vm, RandomXMode, RandomXVM};
+use arweave_rs_types::{consensus::*, *};
+use arweave_rs_validator::pre_validate_block;
 use color_eyre::eyre::eyre;
 use eyre::{Report, Result};
 use futures::future::try_join_all;
-use arweave_rs_indexes::*;
 use reqwest::{Client as ReqwestClient, StatusCode};
-use arweave_rs_validator::pre_validate_block;
+use std::time::{Duration, Instant};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -31,31 +31,35 @@ async fn main() -> Result<()> {
             }
             Err(err) => {
                 println!("Error getting current block {err}");
-                return Err(eyre!(err));            }
+                return Err(eyre!(err));
+            }
         }
         //println!("{}",serde_json::to_string_pretty(&current_block_header).unwrap());
     } else {
         return Err(eyre!("HTTP request returned Status Code {}", res.status()));
     }
 
-    let mut batch: Vec<u64> = vec![];
-    let batch_size = 100;
-
-    let start_block_height = current_block_height - 100;
-
+    // Initialize the block_index, which may mean polling new blocks from arweave
     let block_index: BlockIndex = BlockIndex::new();
     let init_block_index = Instant::now();
     let block_index = block_index.init().await.expect("block index to initialize");
     let end_init_block_index = init_block_index.elapsed();
     println!("BlockIndex initialization: {:?}", end_init_block_index);
 
+    // Initialize the randomx vm for FastHashing (consumes more memory and takes
+    // longer to initialize but produces hashes significantly faster)
     let start_vm = Instant::now();
     let vm = create_randomx_vm(RandomXMode::FastHashing, RANDOMX_PACKING_KEY);
     let end_vm = start_vm.elapsed();
-    println!("RandomX VM initialization: {:?}",end_vm);
-   
+    println!("RandomX VM initialization: {:?}", end_vm);
+
+    // Create a batch of block header heights to request...
+    let mut batch: Vec<u64> = vec![];
+    let batch_size = 100;
+    let start_block_height = current_block_height - 100;
+
     for index in (start_block_height..current_block_height).rev() {
-        let block_height = index as u64;
+        let block_height = index;
 
         batch.push(block_height);
 
@@ -73,12 +77,13 @@ async fn main() -> Result<()> {
             for window in res.windows(2) {
                 let current = &window[0];
                 let previous = &window[1];
-                
+
                 // Handle blocks that have both a previous and a next block
-                //println!("{}:{}", current.height, previous.height);   
+                //println!("{}:{}", current.height, previous.height);
 
                 let start = Instant::now();
-                let solution_hash = pre_validate_block(&current, &previous, &block_index, Some(&vm)).unwrap();
+                let solution_hash =
+                    pre_validate_block(current, previous, &block_index, Some(&vm)).unwrap();
                 let duration = start.elapsed(); // Get the elapsed time
 
                 let encoded = base64_url::encode(&solution_hash);
@@ -88,37 +93,111 @@ async fn main() -> Result<()> {
                 if encoded == encoded2 {
                     println!("✅{} {} {:?}", current.height, encoded, duration);
                 } else {
-                    println!("❌{} {} {} {:?}", current.height, encoded, encoded2, duration);
+                    println!(
+                        "❌{} {} {} {:?}",
+                        current.height, encoded, encoded2, duration
+                    );
                 }
             }
-            
 
             // TODO: Inspect the results to find blocks where the entropy reset happens on the first or last step
-            #[allow(unused_variables)]
-            for header in res {
-                // The first step of the next block is a reset
-                // let remainder = (header.nonce_limiter_info.global_step_number + 1) as f64 / NONCE_LIMITER_RESET_FREQUENCY as f64;
-                // if remainder.fract() == 0.0 {
-                //     println!("next height is reset: {}", header.height);
-                // }
+            // #[allow(unused_variables)]
+            // for header in res {
+            // The first step of the next block is a reset
+            // let remainder = (header.nonce_limiter_info.global_step_number + 1) as f64 / NONCE_LIMITER_RESET_FREQUENCY as f64;
+            // if remainder.fract() == 0.0 {
+            //     println!("next height is reset: {}", header.height);
+            // }
 
-                // let solution_hash = pre_validate_block(&header).unwrap();
-                // let encoded = base64_url::encode(&solution_hash);
+            // let solution_hash = pre_validate_block(&header).unwrap();
+            // let encoded = base64_url::encode(&solution_hash);
 
-                // if encoded == header.hash {
-                //     println!("✅{} {}", header.height, encoded);
-                // } else {
-                //     println!("❌{} {} {}", header.height, encoded, header.hash);
-                // }
+            // if encoded == header.hash {
+            //     println!("✅{} {}", header.height, encoded);
+            // } else {
+            //     println!("❌{} {} {}", header.height, encoded, header.hash);
+            // }
+            // }
+
+            println!(
+                "✅ Finished loading headers! {}/{}!",
+                batch.len(),
+                batch.len()
+            );
+  
+            // Reset the batch, we're going again.
+            batch.clear();
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn process_block_header_batch(
+    block_index: &BlockIndex<Initialized>,
+    vm: &RandomXVM,
+    batch_size: usize,
+    end_height: u64,
+) -> Result<()> {
+    let mut batch: Vec<u64> = vec![];
+    let start_block_height = end_height - batch_size as u64;
+
+    for index in (start_block_height..end_height).rev() {
+        let block_height = index;
+
+        batch.push(block_height);
+
+        // Is it time to make the batch request?
+        if batch.len() == batch_size || index == start_block_height {
+            // Await completion of the reqwest batch
+            let mut res = get_block_headers(&batch)
+                .await
+                .expect("all block headers to be retrieved and parsed");
+
+            // Sort the headers
+            res.sort_by_key(|bh| bh.height);
+            res.reverse();
+
+            // Windows iterator iterates a set using sliding windows, in this case, of size 2
+            for window in res.windows(2) {
+                let current = &window[0];
+                let previous = &window[1];
+
+                let start = Instant::now();
+                let solution_hash =
+                    pre_validate_block(current, previous, block_index, Some(vm))?;
+                // Get the elapsed time for validating the block
+                let duration = start.elapsed(); 
+
+                // Encode the computed solution_hash and the observed one.
+                let encoded = base64_url::encode(&solution_hash);
+                let encoded2 = base64_url::encode(&current.hash);
+
+                // Compare them, printing out the correct emoji if they match or not
+                if encoded == encoded2 {
+                    println!("✅{} {} {:?}", current.height, encoded, duration);
+                } else {
+                    println!(
+                        "❌{} {} {} {:?}",
+                        current.height, encoded, encoded2, duration
+                    );
+                }
             }
 
-            if batch.len() > 0 {
-                println!(
-                    "✅ Finished loading headers! {}/{}!",
-                    batch.len(),
-                    batch.len()
-                );
-            }
+            // TODO: Inspect the results to find blocks where the entropy reset happens on the first or last step
+            // #[allow(unused_variables)]
+            // for header in res {
+            // The first step of the next block is a reset
+            // let remainder = (header.nonce_limiter_info.global_step_number + 1) as f64 / NONCE_LIMITER_RESET_FREQUENCY as f64;
+            // if remainder.fract() == 0.0 {
+            //     println!("next height is reset: {}", header.height);
+            // }
+
+            println!(
+                "✅ Finished loading headers! {}/{}!",
+                batch.len(),
+                batch.len()
+            );
 
             // Reset the batch, we're going again.
             batch.clear();
@@ -148,7 +227,10 @@ pub async fn request_block_header_with_retry(
                     let parsed_res = res.json::<ArweaveBlockHeader>().await;
                     match parsed_res {
                         Ok(parsed) => break Ok(parsed),
-                        Err(err) => { println!("{:?} {url2}", err);  break Err(eyre!(err))},
+                        Err(err) => {
+                            println!("{:?} {url2}", err);
+                            break Err(eyre!(err));
+                        }
                     }
                     // .expect(
                     //     format!("JSON should be parsable to BlockHeaderData {url2}").as_str(),
@@ -156,7 +238,6 @@ pub async fn request_block_header_with_retry(
                     // Possible error(s) here
                     // reqwest::Error { kind: Body, source: hyper::Error(Body, Error { kind: Io(Kind(ConnectionReset)) }) }
                     //println!("Got JSON for block_height: {}", bh);
-                    
                 } else {
                     last_error = Some(eyre!("Reqwest HTTP Status code was {}", res.status()));
                 }
@@ -180,10 +261,10 @@ pub async fn request_block_header_with_retry(
     result
 }
 
-pub async fn get_block_headers(block_heights: &Vec<u64>) -> Result<Vec<ArweaveBlockHeader>> {
+pub async fn get_block_headers(block_heights: &[u64]) -> Result<Vec<ArweaveBlockHeader>> {
     let mut complete_count = 0;
     let client2 = ReqwestClient::new();
-    let requests = block_heights.into_iter().map(|bh| {
+    let requests = block_heights.iter().map(|bh| {
         let url = format!("https://arweave.net/block/height/{}", bh);
         let results = request_block_header_with_retry(bh, url, &client2);
         complete_count += 1;
