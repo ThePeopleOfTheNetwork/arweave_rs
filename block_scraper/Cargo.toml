@@ -1,0 +1,20 @@
+[package]
+name = "block_scraper"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+eyre = "0.6.8"
+color-eyre = "0.6.2"
+base64-url = "2.0.0"
+futures = "0.3.28"
+reqwest = { version = "0.11.18", default-features = false, features = ["rustls-tls","json"] }
+tokio = { version = "1.9.0", features = ["full"] }
+arweave_rs_types = {path = "../types"}
+arweave_rs_indexes = {path = "../indexes"}
+arweave_rs_packing = {path = "../packing"}
+arweave_rs_validator = {path = "../validator"}
+arweave_rs_vdf = {path = "../vdf"}
+arweave_rs_randomx = { path = "../randomx" }

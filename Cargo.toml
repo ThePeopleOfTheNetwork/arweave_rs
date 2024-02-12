@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "arweave_rs",
+	"block_scraper",
 	"types",
 	"indexes",
 	"packing",
