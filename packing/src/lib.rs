@@ -25,7 +25,7 @@ pub fn compute_entropy(
         None => {
             // Creates a disposable RandomXVM instance for use in this function
             vm_storage = Some(create_randomx_vm(
-                RandomXMode::FastHashing,
+                RandomXMode::FastInitialization,
                 RANDOMX_PACKING_KEY,
             ));
             vm = vm_storage.as_ref().unwrap();
