@@ -1,5 +1,5 @@
 # arweave_rs
-Rust based implementation of the Arweave mining software
+Rust based implementation of the Arweave mining software (WIP)
 
 This project makes use of git submodules.
 
