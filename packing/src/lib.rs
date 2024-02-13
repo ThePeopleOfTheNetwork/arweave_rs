@@ -67,7 +67,7 @@ fn compute_randomx_hash_with_entropy(
         .unwrap()
 }
 
-/// Only used to text / exercise pack chunk plumbing. Candidate for deletion.
+/// Only used to test / exercise pack chunk plumbing. Candidate for deletion.
 fn pack_chunk(chunk_offset: U256, reward_address: &H256, tx_root: &H256) -> Vec<u8> {
     let key = RANDOMX_PACKING_KEY;
     let flags = RandomXFlag::get_recommended_flags();
