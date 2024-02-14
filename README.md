@@ -12,6 +12,9 @@ Then compile using:
 ```bash 
 cargo build
 ```
+## MacOS Build
+The above instructions should be sufficient.
+
 ## Windows Build
 There are a few dependencies to build on Windows.
 
