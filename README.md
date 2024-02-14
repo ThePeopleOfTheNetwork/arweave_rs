@@ -23,4 +23,4 @@ There are a few dependencies to build on Windows.
 `randomX` - You will need Visual Studio 2019 with the "Desktop developmennt with C++" Workload selected. Make sure `C++ Build tools and core features` are installed. Specifically the `C++ CMake tools for Windows`.
 
 ## License
-This project is dual-licensed under [MIT]() and [Apache-2.0](), and users can choose either license according to their preference.
+This project is dual-licensed under [MIT](https://github.com/ThePeopleOfTheNetwork/arweave_rs/blob/main/LICENSE-MIT) and [Apache-2.0](https://github.com/ThePeopleOfTheNetwork/arweave_rs/blob/main/LICENSE-APACHE), and users can choose either license according to their preference.
