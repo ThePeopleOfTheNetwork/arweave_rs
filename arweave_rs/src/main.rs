@@ -33,6 +33,7 @@ struct TestContext {
     pub max_nonce_case: (ArweaveBlockHeader, ArweaveBlockHeader),
     pub poa_failed_case: (ArweaveBlockHeader, ArweaveBlockHeader),
     pub bad_tx_path_case: (ArweaveBlockHeader, ArweaveBlockHeader),
+    pub double_signing_proof_case: (ArweaveBlockHeader, ArweaveBlockHeader),
 }
 
 // Static test data for the tests, lazy loaded at runtime.
@@ -87,6 +88,9 @@ lazy_static! {
         let bad_tx_path_case = parse_block_header_from_file("data/blocks/1338549.json");
         let bad_tx_path_case_prev = parse_block_header_from_file("data/blocks/1338548.json");
 
+        let double_signing_proof_case = parse_block_header_from_file("data/blocks/1374310.json");
+        let double_signing_proof_case_prev = parse_block_header_from_file("data/blocks/1374309.json");
+
         let block_index: BlockIndex = BlockIndex::new();
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let block_index = runtime.block_on(block_index.init()).unwrap();
@@ -110,7 +114,8 @@ lazy_static! {
             reset_case2: (reset_case2, reset_case2_prev),
             max_nonce_case: (max_nonce_case, max_nonce_case_prev),
             poa_failed_case: (poa_failed_case, poa_failed_case_prev),
-            bad_tx_path_case: (bad_tx_path_case, bad_tx_path_case_prev)
+            bad_tx_path_case: (bad_tx_path_case, bad_tx_path_case_prev),
+            double_signing_proof_case: (double_signing_proof_case,double_signing_proof_case_prev)
         };
         tc
     };
@@ -320,7 +325,7 @@ fn test_randomx_entropy() -> bool {
 }
 
 fn test_pre_validation() -> bool {
-    let (block_header, previous_block_header) = &TEST_DATA.poa_failed_case;
+    let (block_header, previous_block_header) = &TEST_DATA.double_signing_proof_case;
 
     let randomx_vm = create_randomx_vm(RandomXMode::FastInitialization, RANDOMX_PACKING_KEY);
 

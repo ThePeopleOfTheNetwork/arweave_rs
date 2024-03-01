@@ -507,15 +507,15 @@ impl DoubleSigningProofBytes for DoubleSigningProof {
 
         // If a DoubleSigningProof exists, the first byte should be 1
         buff.extend_raw_buf(1, &[1])
-            .extend_optional_raw_buf(64, &self.pub_key)
-            .extend_optional_raw_buf(64, &self.sig1)
+            .extend_optional_raw_buf(512, &self.pub_key)
+            .extend_optional_raw_buf(512, &self.sig1)
             .extend_big(2, &self.cdiff1.unwrap_or_default())
             .extend_big(2, &self.prev_cdiff1.unwrap_or_default())
-            .extend_raw_buf(8, self.preimage1.unwrap_or_default().as_bytes())
-            .extend_optional_raw_buf(64, &self.sig2)
+            .extend_raw_buf(64, self.preimage1.unwrap_or_default().as_bytes())
+            .extend_optional_raw_buf(512, &self.sig2)
             .extend_big(2, &self.cdiff2.unwrap_or_default())
             .extend_big(2, &self.prev_cdiff2.unwrap_or_default())
-            .extend_raw_buf(8, self.preimage2.unwrap_or_default().as_bytes());
+            .extend_raw_buf(64, self.preimage2.unwrap_or_default().as_bytes());
         buff
     }
 }

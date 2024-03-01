@@ -1,3 +1,5 @@
+use crate::H512;
+
 use super::{H256, H384};
 
 /// Traits to decode base64_url encoded hashes into their corresponding types
@@ -15,6 +17,18 @@ impl DecodeHash for H256 {
 
     fn empty() -> Self {
         H256::zero()
+    }
+}
+
+impl DecodeHash for H512 {
+    fn from(base64_url_string: &str) -> Result<Self, String> {
+        base64_url::decode(base64_url_string)
+            .map_err(|e| e.to_string())
+            .map(|bytes|  H512::from_slice(bytes.as_slice()))
+    }
+
+    fn empty() -> Self {
+        H512::zero()
     }
 }
 

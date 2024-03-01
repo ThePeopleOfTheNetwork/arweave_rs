@@ -244,7 +244,7 @@ pub struct DoubleSigningProof {
     #[serde(default)]
     pub prev_cdiff1: Option<U256>,
     #[serde(default)]
-    pub preimage1: Option<H256>,
+    pub preimage1: Option<H512>,
     #[serde(default)]
     pub sig2: Option<Base64>,
     #[serde(default)]
@@ -252,7 +252,7 @@ pub struct DoubleSigningProof {
     #[serde(default)]
     pub prev_cdiff2: Option<U256>,
     #[serde(default)]
-    pub preimage2: Option<H256>,
+    pub preimage2: Option<H512>,
 }
 
 /// Stores the `nonce_limiter_info` in the [`ArweaveBlockHeader`]
@@ -586,6 +586,41 @@ impl Serialize for H384 {
 
 // Implement Deserialize for H384
 impl<'de> Deserialize<'de> for H384 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: String = Deserialize::deserialize(deserializer)?;
+        DecodeHash::from(&s).map_err(D::Error::custom)
+    }
+}
+
+//==============================================================================
+// H512 Type
+//------------------------------------------------------------------------------
+construct_fixed_hash! {
+    /// A 512-bit hash type (48 bytes)
+    pub struct H512(64);
+}
+
+impl H512 {
+    pub fn to_vec(self) -> Vec<u8> {
+        self.0.to_vec()
+    }
+}
+
+// Implement Serialize for H512
+impl Serialize for H512 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(base64_url::encode(self.as_bytes()).as_str())
+    }
+}
+
+// Implement Deserialize for H512
+impl<'de> Deserialize<'de> for H512 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
