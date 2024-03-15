@@ -128,6 +128,10 @@ pub async fn process_block_header_batch(
                 // Get the elapsed time for validating the block
                 let duration = start.elapsed(); 
 
+                if let Some(_pre) = current.double_signing_proof.preimage1 {
+                    println!("🌟 Double Signing proof for {}", current.height);
+                }
+
                 // Encode the computed solution_hash and the observed one.
                 let encoded = base64_url::encode(&solution_hash);
                 let encoded2 = base64_url::encode(&current.hash);
