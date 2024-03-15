@@ -201,7 +201,7 @@ pub struct ArweaveBlockHeader {
     /// Unix timestamp of when the block was discovered/produced
     pub timestamp: u64,
 
-    /// The Merkle root of the tree who's leaves are the data_roots of each of
+    /// The Merkle root of the tree whose leaves are the data_roots of each of
     /// the transactions in the block.
     #[serde(default, with = "optional_hash")]
     pub tx_root: Option<H256>,

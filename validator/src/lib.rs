@@ -1,17 +1,17 @@
 //! Validates all of the Arweave block header fields follow Arweave consensus
 //! rules.
 #![allow(dead_code)]
-use arweave_rs_randomx::RandomXVM;
-use arweave_rs_types::{*, consensus::*};
-use color_eyre::eyre::{eyre, Result};
 use arweave_rs_indexes::*;
+use arweave_rs_packing::{feistel::*, *};
+use arweave_rs_randomx::RandomXVM;
+use arweave_rs_types::{consensus::*, *};
+use color_eyre::eyre::{eyre, Result};
 use merkle::*;
 use openssl::sha;
-use arweave_rs_packing::{*, feistel::*};
 
 pub mod merkle;
 
-/// Sequentially performs all of the checks required to validate an Arweave 
+/// Sequentially performs all of the checks required to validate an Arweave
 /// block starting with the simplest (least expensive) checks and finishing with
 /// the most involved checks. Note: This excludes the VDF checkpoint validation
 /// which is performed separately.
@@ -140,7 +140,7 @@ pub fn pre_validate_block(
         return Err(eyre!("poa is invalid"));
     }
 
-    // POA2 merkle proofs / chunk validation (if neccessary)
+    // POA2 merkle proofs / chunk validation (if necessary)
     if let Some(recall_byte_2) = recall_byte_2 {
         if !poa_is_valid(
             &block_header.poa2,
@@ -414,8 +414,11 @@ fn poa_is_valid(
         return false;
     }
 
-    //let block_size = block_bounds.block_end_offset - block_bounds.block_start_offset;
-    let byte_offset_in_block = get_byte_offset(recall_byte, block_bounds.block_start_offset, block_bounds.block_end_offset);
+    let byte_offset_in_block = get_byte_offset(
+        recall_byte,
+        block_bounds.block_start_offset,
+        block_bounds.block_end_offset,
+    );
     // println!(
     //     "tx_root: {:?} target_offset_in_block: {byte_offset_in_block}",
     //     base64_url::encode(&block_bounds.tx_root)
@@ -423,6 +426,9 @@ fn poa_is_valid(
 
     // TX_PATH Validation
     // --------------------------------------------------------------
+    // tx_root is the merkle root of the tree whose leaves are the data_roots 
+    // of each of the transactions in the block. This path matches the tx_root
+    // in the block header to a specific transactions data_path
     let tx_path_result = match validate_path(
         block_bounds.tx_root.0,
         &poa_data.tx_path,
@@ -450,7 +456,9 @@ fn poa_is_valid(
 
     // DATA_PATH Validation
     // --------------------------------------------------------------
-    // The leaf proof in the tx_path is the root of the data_path
+    // The leaf hash in the tx_path proof is the root of the data_path merkle
+    // tree. This validates the path from the transactions data_root to the
+    // specific chunk in the transactions data that is being provided in the poa
     let data_path_result = match validate_path(
         tx_path_result.leaf_hash,
         &poa_data.data_path,
@@ -473,7 +481,6 @@ fn poa_is_valid(
     let input = get_chunk_entropy_input(chunk_offset.into(), &block_bounds.tx_root, reward_addr);
     let randomx_program_count = RANDOMX_PACKING_ROUNDS_2_6;
     let entropy = compute_entropy(&input, randomx_program_count, randomx_vm);
- 
 
     // Use a feistel cypher + entropy to decrypt the chunk
     // randomx_long_with_entropy.cpp: 113
