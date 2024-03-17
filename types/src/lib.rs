@@ -60,7 +60,7 @@ pub struct ArweaveBlockHeader {
 
     /// A performance optimization for block validation.
     ///
-    /// For a block to be valid its produce must have calculated a
+    /// For a block to be valid its producer must have calculated a
     /// `solution_hash` that exceeds the difficulty setting of the network
     /// (indicated by the `diff` field in this struct). That `solution_hash` is
     /// a `SHA-256` hash of the combination of the `mining_hash` (named `H0` in
@@ -258,17 +258,33 @@ pub struct DoubleSigningProof {
 /// Stores the `nonce_limiter_info` in the [`ArweaveBlockHeader`]
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct NonceLimiterInfo {
+    /// The output of the latest step - the source of the entropy for the mining nonces.
     pub output: H256,
+    /// The global sequence number of the nonce limiter step at which the block was found.
     pub global_step_number: u64,
+    /// The hash of the latest block mined below the current reset line.
     pub seed: H384,
+    /// The hash of the latest block mined below the future reset line.
     pub next_seed: H384,
+    /// The weave size of the latest block mined below the current reset line.
     pub zone_upper_bound: u64,
+    /// The weave size of the latest block mined below the future reset line.
     pub next_zone_upper_bound: u64,
+    /// The output of the latest step of the previous block
     pub prev_output: H256,
+    /// VDF_CHECKPOINT_COUNT_IN_STEP checkpoints from the most recent step in the nonce limiter process.
     pub last_step_checkpoints: H256List,
+    /// A list of the output of each step of the nonce limiting process. Note: each step
+    /// has VDF_CHECKPOINT_COUNT_IN_STEP checkpoints, the last of which is that step's output.
+    /// This field would be more accurately named "steps" as checkpoints are between steps.
     pub checkpoints: H256List,
+    /// The number of SHA2-256 iterations in a single VDF checkpoint. The protocol aims to keep the
+	/// checkpoint calculation time to around 40ms by varying this parameter. Note: there are
+	/// 25 checkpoints in a single VDF step - so the protocol aims to keep the step calculation at
+	/// 1 second by varying this parameter.
     #[serde(default, with = "option_u64_stringify")]
     pub vdf_difficulty: Option<u64>,
+    /// The VDF difficulty scheduled for to be applied after the next VDF reset line.
     #[serde(default, with = "option_u64_stringify")]
     pub next_vdf_difficulty: Option<u64>,
 }
