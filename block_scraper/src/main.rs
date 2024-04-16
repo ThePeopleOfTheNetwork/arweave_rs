@@ -136,13 +136,19 @@ pub async fn process_block_header_batch(
                 let encoded = base64_url::encode(&solution_hash);
                 let encoded2 = base64_url::encode(&current.hash);
 
+                let milliseconds = duration.as_micros() as f64 / 1000.0;
+
                 // Compare them, printing out the correct emoji if they match or not
                 if encoded == encoded2 {
-                    println!("✅{} {} {:?}", current.height, encoded, duration);
+                    if let Some(_chunk2) = current.chunk2_hash {
+                        println!("✅{} {} {:.2}ms  2️⃣ PoA2", current.height, encoded, milliseconds);
+                    } else {
+                        println!("✅{} {} {:.2}ms", current.height, encoded, milliseconds);
+                    }
                 } else {
                     println!(
-                        "❌{} {} {} {:?}",
-                        current.height, encoded, encoded2, duration
+                        "❌{} {} {} {:.2}ms",
+                        current.height, encoded, encoded2, milliseconds
                     );
                 }
             }
